@@ -1,32 +1,96 @@
 import * as React from "react";
-import { View, Text, ScrollView, Pressable, Image, StyleSheet } from "react-native";
+import { View, Text, ScrollView, Pressable, Image, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-
-const savedBooks = [
-  { id: 1, title: "Brave New World", price: "$12.99", image: "https://placehold.co/100x150" },
-  { id: 2, title: "The Catcher in the Rye", price: "$9.99", image: "https://placehold.co/100x150" },
-];
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
+import { getCollectionByUser, deleteCollection, postCartItem } from "../../api/api-functions";
+import type { Collection } from "../../api/api-functions";
+import { useFocusEffect } from "@react-navigation/native";
+import { API_URL } from "@/api/api-connection";
 
 const SavedPage: React.FC = () => {
+  const [savedBooks, setSavedBooks] = React.useState<Collection[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [userId, setUserId] = React.useState<number | null>(null);
+  const router = useRouter();
+
+  const loadUserAndSavedBooks = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const userJson = await AsyncStorage.getItem("user");
+      if (userJson) {
+        const user = JSON.parse(userJson);
+        setUserId(user.userId);
+        const collections = await getCollectionByUser(user.userId);
+        setSavedBooks(collections.filter(c => c.book != null));
+      }
+    } catch (error) {
+      console.error("Failed to load saved books", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadUserAndSavedBooks();
+  }, [loadUserAndSavedBooks]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadUserAndSavedBooks();
+    }, [loadUserAndSavedBooks])
+  );
+
   const handleBookPress = (bookId: number) => {
-    // Here you would navigate to book details, left empty intentionally
+    router.push({
+      pathname: "/BookDetailsPage",
+      params: { id: bookId.toString() },
+    });
   };
 
-  const handleAddToCart = (bookId: number) => {
-    // Here you would handle adding the book to the cart
+  const handleAddToCart = async (bookId: number) => {
+    if (userId === null) return;
+    try {
+      const addedItem = await postCartItem({ userId, bookId, quantity: 1 });
+      if (addedItem) {
+        Alert.alert("Success", "Book added to cart.");
+      } else {
+        Alert.alert("Error", "Failed to add book to cart.");
+      }
+    } catch (error) {
+      console.error("Error adding to cart:", error);
+      Alert.alert("Error", "Failed to add book to cart.");
+    }
   };
 
-  const handleDelete = (bookId: number) => {
-    // Here you would handle deleting the book from saved
+  const handleDelete = async (bookId: number) => {
+    if (userId === null) return;
+    try {
+      const collectionToDelete = savedBooks.find(c => c.bookId === bookId);
+      if (!collectionToDelete) return;
+
+      await deleteCollection(collectionToDelete.collectionId, userId);
+      setSavedBooks(prev => prev.filter(c => c.bookId !== bookId));
+      Alert.alert("Deleted", "Book removed from collection");
+    } catch (error) {
+      console.error("Failed to delete book", error);
+      Alert.alert("Error", "Failed to remove book from collection.");
+    }
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator size="large" color="#ffffff" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {/* Navbar */}
       <View style={styles.navbar}>
         <Text style={styles.logo}>Your saved books</Text>
       </View>
-
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {savedBooks.length === 0 ? (
           <View style={styles.emptyState}>
@@ -34,44 +98,47 @@ const SavedPage: React.FC = () => {
             <Text style={styles.emptyText}>No saved books yet.</Text>
           </View>
         ) : (
-          savedBooks.map((book) => (
-            <Pressable
-              key={book.id}
-              style={({ pressed }) => [
-                styles.bookItem,
-                pressed && { backgroundColor: "#A095D1" },
-              ]}
-              onPress={() => handleBookPress(book.id)}
-            >
-              <Image source={{ uri: book.image }} style={styles.bookImage} />
+          savedBooks.map((collection) => {
+            const book = collection.book!;
+            return (
+              <Pressable
+                key={collection.collectionId}
+                style={({ pressed }) => [
+                  styles.bookItem,
+                  pressed && { backgroundColor: "#A095D1" },
+                ]}
+                onPress={() => handleBookPress(book.bookId)}
+              >
+                <Image source={{ uri: `${API_URL}/images/${book.imageUrl}` }} style={styles.bookImage} />
+                
+                <View style={styles.bookInfo}>
+                  <Text style={styles.bookTitle} numberOfLines={2}>{book.title}</Text>
+                  <Text style={styles.bookPrice}>${book.price.toFixed(2)}</Text>
+                </View>
 
-              <View style={styles.bookInfo}>
-                <Text style={styles.bookTitle} numberOfLines={2}>{book.title}</Text>
-                <Text style={styles.bookPrice}>{book.price}</Text>
-              </View>
-
-              <View style={styles.actionButtons}>
-                <Pressable
-                  onPress={() => handleAddToCart(book.id)}
-                  style={({ pressed }) => [
-                    styles.iconButton,
-                    pressed && { opacity: 0.5 },
-                  ]}
-                >
-                  <Ionicons name="cart-outline" size={24} color="#ffffff" />
-                </Pressable>
-                <Pressable
-                  onPress={() => handleDelete(book.id)}
-                  style={({ pressed }) => [
-                    styles.iconButton,
-                    pressed && { opacity: 0.5 },
-                  ]}
-                >
-                  <Ionicons name="trash-outline" size={24} color="#ffffff" />
-                </Pressable>
-              </View>
-            </Pressable>
-          ))
+                <View style={styles.actionButtons}>
+                  <Pressable
+                    onPress={() => handleAddToCart(book.bookId)}
+                    style={({ pressed }) => [
+                      styles.iconButton,
+                      pressed && { opacity: 0.5 },
+                    ]}
+                  >
+                    <Ionicons name="cart-outline" size={24} color="#ffffff" />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleDelete(book.bookId)}
+                    style={({ pressed }) => [
+                      styles.iconButton,
+                      pressed && { opacity: 0.5 },
+                    ]}
+                  >
+                    <Ionicons name="trash-outline" size={24} color="#ffffff" />
+                  </Pressable>
+                </View>
+              </Pressable>
+            );
+          })
         )}
       </ScrollView>
     </View>

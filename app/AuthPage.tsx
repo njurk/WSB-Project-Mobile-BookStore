@@ -1,52 +1,55 @@
 import * as React from "react";
 import { useState } from "react";
+import { useRouter } from "expo-router";
 import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useNavigation } from "@react-navigation/native";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { login, register } from "../services/apiService";
-
-type RootStackParamList = {
-  AuthPage: undefined;
-  HomePage: undefined;
-};
-
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+import { login, register, UserResponse } from "../api/api-functions";
 
 const AuthPage: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
+  const [identifier, setIdentifier] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
-  const navigation = useNavigation<NavigationProp>();
+  const [password, setPassword] = useState("");
+  const router = useRouter();
 
   const submit = async () => {
-    console.log("Submit button pressed", { isLogin, email, password, username });
-
-    if (!email || !password || (!isLogin && !username)) {
-      Alert.alert("Error", "Please fill in all fields");
-      return;
-    }
-
-    try {
-      const data = isLogin
-        ? await login(email, password)
-        : await register(email, password, username);
-
-      console.log("API response data", data);
-
-      await AsyncStorage.setItem("token", data.token);
-      console.log("Token stored", data.token);
-
-      setEmail("");
-      setPassword("");
-      setUsername("");
-      navigation.navigate("HomePage");
-
-    } catch (error) {
-      console.error("Error in submit", error);
-      const errorMessage = error instanceof Error ? error.message : `Failed to ${isLogin ? "login" : "register"}. Check server logs or CORS.`;
-      Alert.alert("Error", errorMessage);
+    if (isLogin) {
+      if (!identifier.trim() || !password.trim()) {
+        Alert.alert("Error", "Please fill in all fields");
+        return;
+      }
+      try {
+        const data: UserResponse = await login({
+          Identifier: identifier.trim(),
+          Password: password.trim(),
+        });
+        await AsyncStorage.setItem("user", JSON.stringify(data));
+        setIdentifier("");
+        setPassword("");
+        router.replace("/(tabs)/HomePage");
+      } catch (error) {
+        Alert.alert("Error", error instanceof Error ? error.message : "Login failed");
+      }
+    } else {
+      if (!email.trim() || !username.trim() || !password.trim()) {
+        Alert.alert("Error", "Please fill in all fields");
+        return;
+      }
+      try {
+        const data: UserResponse = await register({
+          Email: email.trim(),
+          Username: username.trim(),
+          Password: password.trim(),
+        });
+        await AsyncStorage.setItem("user", JSON.stringify(data));
+        setEmail("");
+        setUsername("");
+        setPassword("");
+        router.replace("/(tabs)/HomePage");
+      } catch (error) {
+        Alert.alert("Error", error instanceof Error ? error.message : "Registration failed");
+      }
     }
   };
 
@@ -55,7 +58,7 @@ const AuthPage: React.FC = () => {
       <View style={styles.formContainer}>
         <View style={styles.logoContainer}>
           <Image
-            source={require("../../assets/images/bookstore-logo.png")}
+            source={require("../assets/images/bookstore-logo.png")}
             accessibilityLabel="Logo"
             style={styles.logo}
           />
@@ -78,27 +81,44 @@ const AuthPage: React.FC = () => {
         </View>
 
         <View style={styles.fieldsContainer}>
-          {!isLogin && (
+          {isLogin ? (
             <View style={styles.fieldContainer}>
-              <Text style={styles.label}>Username</Text>
+              <Text style={styles.label}>Email or Username</Text>
               <TextInput
-                placeholder="Enter a username"
-                value={username}
-                onChangeText={setUsername}
+                placeholder="Enter your email or username"
+                value={identifier}
+                onChangeText={setIdentifier}
                 style={styles.input}
+                autoCapitalize="none"
+                keyboardType="default"
               />
             </View>
-          )}
+          ) : (
+            <>
+              <View style={styles.fieldContainer}>
+                <Text style={styles.label}>Email</Text>
+                <TextInput
+                  placeholder="Enter your email"
+                  value={email}
+                  onChangeText={setEmail}
+                  style={styles.input}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+              </View>
 
-          <View style={styles.fieldContainer}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              placeholder="Enter your email"
-              value={email}
-              onChangeText={setEmail}
-              style={styles.input}
-            />
-          </View>
+              <View style={styles.fieldContainer}>
+                <Text style={styles.label}>Username</Text>
+                <TextInput
+                  placeholder="Enter your username"
+                  value={username}
+                  onChangeText={setUsername}
+                  style={styles.input}
+                  autoCapitalize="none"
+                />
+              </View>
+            </>
+          )}
 
           <View style={styles.fieldContainer}>
             <Text style={styles.label}>Password</Text>
@@ -117,7 +137,7 @@ const AuthPage: React.FC = () => {
           </View>
         </View>
 
-        <TouchableOpacity onPress={() => { console.log("Button clicked"); submit(); }} style={styles.button}>
+        <TouchableOpacity onPress={submit} style={styles.button}>
           <Text style={styles.buttonText}>
             {isLogin ? "Login" : "Create Account"}
           </Text>

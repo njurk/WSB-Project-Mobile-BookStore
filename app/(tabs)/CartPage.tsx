@@ -1,32 +1,100 @@
 import * as React from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, Image } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet, Image, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-
-const cartItems = [
-  { id: 1, title: "Brave New World", price: "$12.99", quantity: 1, image: "https://upload.wikimedia.org/wikipedia/commons/7/7a/The_Great_Gatsby_Cover_1925_Retouched.jpg" },
-  { id: 2, title: "The Catcher in the Rye", price: "$9.99", quantity: 2, image: "https://upload.wikimedia.org/wikipedia/commons/7/7a/The_Great_Gatsby_Cover_1925_Retouched.jpg" },
-];
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getCartByUserId, deleteCartItem, updateCartItemQuantity, CartItem } from "../../api/api-functions";
+import { API_URL } from "../../api/api-connection";
+import { useFocusEffect } from '@react-navigation/native';
 
 const CartPage: React.FC = () => {
-  const handleRemoveItem = (itemId: number) => {
-    // Logic to remove the item from the cart
-  };
+  const [cartItems, setCartItems] = React.useState<Array<CartItem>>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [userId, setUserId] = React.useState<number | null>(null);
 
+  useFocusEffect(
+    React.useCallback(() => {
+      let isActive = true;
+  
+      const loadUserAndCart = async () => {
+        try {
+          const userJson = await AsyncStorage.getItem("user");
+          if (userJson) {
+            const user = JSON.parse(userJson);
+            setUserId(user.userId);
+            const cart = await getCartByUserId(user.userId);
+            if (isActive) {
+              setCartItems(cart.filter(item => item.book != null));
+            }
+          }
+        } catch (error) {
+          console.error("Failed to load user/cart", error);
+        } finally {
+          if (isActive) setLoading(false);
+        }
+      };
+  
+      loadUserAndCart();
+  
+      return () => {
+        isActive = false;
+      };
+    }, [])
+  );  
+
+  const handleRemoveItem = async (itemId: number) => {
+    try {
+      await deleteCartItem(itemId);
+      setCartItems((prev) => prev.filter(item => item.cartId !== itemId));
+    } catch (error) {
+      console.error("Failed to remove item", error);
+    }
+  };
+  
+  const updateQuantity = async (itemId: number, newQuantity: number) => {
+    if (newQuantity < 1) return;
+  
+    const prevCartItems = [...cartItems];
+    setCartItems(prev =>
+      prev.map(i => i.cartId === itemId ? { ...i, quantity: newQuantity } : i)
+    );
+  
+    try {
+      await updateCartItemQuantity(itemId, newQuantity);
+    } catch (error) {
+      console.error("Failed to update quantity", error);
+      setCartItems(prevCartItems);
+    }
+  };
+  
   const handleIncreaseQuantity = (itemId: number) => {
-    // Logic to increase item quantity
+    const item = cartItems.find(i => i.cartId === itemId);
+    if (!item) return;
+    updateQuantity(itemId, item.quantity + 1);
   };
-
+  
   const handleDecreaseQuantity = (itemId: number) => {
-    // Logic to decrease item quantity
+    const item = cartItems.find(i => i.cartId === itemId);
+    if (!item) return;
+    updateQuantity(itemId, item.quantity - 1);
+  };   
+  
+  const calculateTotal = () => {
+    return cartItems.reduce(
+      (total, item) => total + (item.book?.price ?? 0) * item.quantity,
+      0
+    );
   };
 
-  const calculateTotal = () => {
-    return cartItems.reduce((total, item) => total + parseFloat(item.price.slice(1)) * item.quantity, 0);
-  };
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator size="large" color="#ffffff" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {/* Navbar */}
       <View style={styles.navbar}>
         <Text style={styles.logo}>Your Cart</Text>
       </View>
@@ -39,10 +107,9 @@ const CartPage: React.FC = () => {
           </View>
         ) : (
           cartItems.map((item) => (
-            <View key={item.id} style={styles.cartItem}>
-              {/* Delete Button with opacity effect */}
+            <View key={item.cartId} style={styles.cartItem}>
               <Pressable
-                onPress={() => handleRemoveItem(item.id)}
+                onPress={() => handleRemoveItem(item.cartId)}
                 style={({ pressed }) => [
                   styles.removeButton,
                   pressed && { opacity: 0.5 },
@@ -50,13 +117,13 @@ const CartPage: React.FC = () => {
               >
                 <Ionicons name="trash-outline" size={24} color="#ffffff" />
               </Pressable>
-
-              <Image source={{ uri: item.image }} style={styles.cartItemImage} />
+          
+              <Image source={{ uri: `${API_URL}/images/${item.book.imageUrl}` }} style={styles.cartItemImage} />
               <View style={styles.cartItemInfo}>
-                <Text style={styles.cartItemTitle}>{item.title}</Text>
+                <Text style={styles.cartItemTitle}>{item.book?.title ?? "No Title"}</Text>
                 <View style={styles.quantityContainer}>
                   <Pressable
-                    onPress={() => handleDecreaseQuantity(item.id)}
+                    onPress={() => handleDecreaseQuantity(item.cartId)}
                     style={({ pressed }) => [
                       styles.quantityButton,
                       pressed && { opacity: 0.5 },
@@ -66,7 +133,7 @@ const CartPage: React.FC = () => {
                   </Pressable>
                   <Text style={styles.quantityText}>{item.quantity}</Text>
                   <Pressable
-                    onPress={() => handleIncreaseQuantity(item.id)}
+                    onPress={() => handleIncreaseQuantity(item.cartId)}
                     style={({ pressed }) => [
                       styles.quantityButton,
                       pressed && { opacity: 0.5 },
@@ -76,13 +143,12 @@ const CartPage: React.FC = () => {
                   </Pressable>
                 </View>
               </View>
-
-              {/* Price moved to where delete icon was */}
-              <Text style={styles.cartItemPrice}>{item.price}</Text>
+        
+              <Text style={styles.cartItemPrice}>${(item.book?.price ?? 0).toFixed(2)}</Text>
             </View>
           ))
         )}
-
+        
         {cartItems.length > 0 && (
           <View style={styles.totalContainer}>
             <Text style={styles.totalText}>Total: ${calculateTotal().toFixed(2)}</Text>

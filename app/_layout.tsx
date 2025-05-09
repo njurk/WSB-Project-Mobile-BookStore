@@ -6,7 +6,7 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={MainTheme}>
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="AuthPage" />
         <Stack.Screen name="+not-found" />
       </Stack>
     </ThemeProvider>

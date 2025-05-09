@@ -1,33 +1,79 @@
 import * as React from "react";
-import { View, Text, ScrollView, Pressable, TextInput, Image, StyleSheet } from "react-native";
+import { View, Text, ScrollView, Pressable, TextInput, Image, StyleSheet, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useState, useEffect } from "react";
+import { getResource } from "../../api/api-functions";
+import type { Book, Genre } from "../../api/api-functions";
+import { API_URL } from "../../api/api-connection";
+import { useRouter } from "expo-router";
 
-const featuredBooks = [
-  { id: 1, title: "The Great Gatsby", image: "https://upload.wikimedia.org/wikipedia/commons/7/7a/The_Great_Gatsby_Cover_1925_Retouched.jpg", price: 9.99 },
-  { id: 2, title: "To Kill a Mockingbird", image: "https://upload.wikimedia.org/wikipedia/commons/7/7a/The_Great_Gatsby_Cover_1925_Retouched.jpg", price: 12.49 },
-  { id: 3, title: "1984", image: "https://upload.wikimedia.org/wikipedia/commons/7/7a/The_Great_Gatsby_Cover_1925_Retouched.jpg", price: 8.75 },
-  { id: 4, title: "Pride and Prejudice", image: "https://upload.wikimedia.org/wikipedia/commons/7/7a/The_Great_Gatsby_Cover_1925_Retouched.jpg", price: 7.20 },
-];
+const BookCard = ({ book, onPress }: { book: Book; onPress: () => void }) => {
+  return (
+    <Pressable style={styles.bookCard} android_ripple={{ color: "#A095D1" }} onPress={onPress}>
+      <Image source={{ uri: `${API_URL}/images/${book.imageUrl}` }} style={styles.bookImage} />
+      <Text style={styles.bookTitle} numberOfLines={2}>{book.title}</Text>
+      <Text style={styles.bookPrice}>
+        ${book.price != null ? book.price.toFixed(2) : "0.00"}
+      </Text>
+      <View style={styles.bookActions}>
+        <Pressable style={styles.iconButton} android_ripple={{ color: "#ccc" }}>
+          <Ionicons name="cart-outline" size={22} color="#ffffff" />
+        </Pressable>
+        <Pressable style={styles.iconButton} android_ripple={{ color: "#ccc" }}>
+          <Ionicons name="heart-outline" size={22} color="#ffffff" />
+        </Pressable>
+      </View>
+    </Pressable>
+  );
+};
 
-const genres = ["Fiction", "Mystery", "Romance", "Science Fiction", "Fantasy", "Biography"];
+const GenreButton = ({ genre }: { genre: Genre }) => {
+  return (
+    <Pressable style={styles.genreButton} android_ripple={{ color: "#A095D1" }}>
+      <Text style={styles.genreText}>{genre.name}</Text>
+    </Pressable>
+  );
+};
 
 const HomePage: React.FC = () => {
+  const router = useRouter();
+  const [featuredBooks, setFeaturedBooks] = useState<Book[]>([]);
+  const [genres, setGenres] = useState<Genre[]>([]);
+
+  useEffect(() => {
+    const fetchFeaturedBooks = async () => {
+      try {
+        const books = await getResource<Book[]>("Book");
+        setFeaturedBooks(books);
+      } catch (error) {
+        Alert.alert("Error", "Failed to load featured books.");
+        console.error(error);
+      }
+    };
+
+    const fetchGenres = async () => {
+      try {
+        const genresList = await getResource<Genre[]>("Genre");
+        setGenres(genresList);
+      } catch (error) {
+        Alert.alert("Error", "Failed to load genres.");
+        console.error(error);
+      }
+    };
+
+    fetchFeaturedBooks();
+    fetchGenres();
+  }, []);
+
   return (
     <View style={styles.container}>
-      {/* Navbar */}
       <View style={styles.navbar}>
         <Text style={styles.logo}>BookStore</Text>
-        <Pressable
-                  style={({ pressed }) => [
-                    styles.iconButton,
-                    pressed && { opacity: 0.5 },
-                  ]}
-                >
+        <Pressable style={styles.iconButton} android_ripple={{ color: "#ccc" }}>
           <Ionicons name="cart-outline" size={24} color="#ffffff" />
         </Pressable>
       </View>
 
-      {/* Search Bar */}
       <View style={styles.searchBar}>
         <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
         <TextInput
@@ -38,59 +84,26 @@ const HomePage: React.FC = () => {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Featured Books */}
         <Text style={styles.sectionTitle}>Featured Books</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.featuredScroll}>
           {featuredBooks.map((book) => (
-            <Pressable
-              key={book.id}
-              style={({ pressed }) => [
-                styles.bookCard,
-                pressed && { backgroundColor: "#A095D1" },
-              ]}
-            >
-              <Image source={{ uri: book.image }} style={styles.bookImage} />
-
-              {/* Book Info */}
-              <Text style={styles.bookTitle} numberOfLines={2}>{book.title}</Text>
-              <Text style={styles.bookPrice}>${book.price.toFixed(2)}</Text>
-
-              {/* Action Buttons Inside Pressable */}
-              <View style={styles.bookActions}>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.iconButton,
-                    pressed && { opacity: 0.5 },
-                  ]}
-                >
-                  <Ionicons name="cart-outline" size={22} color="#ffffff" />
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.iconButton,
-                    pressed && { opacity: 0.5 },
-                  ]}
-                >
-                  <Ionicons name="heart-outline" size={22} color="#ffffff" />
-                </Pressable>
-              </View>
-            </Pressable>
+            <BookCard
+              key={book.bookId}
+              book={book}
+              onPress={() =>
+                router.push({
+                  pathname: "/BookDetailsPage",
+                  params: { id: book.bookId.toString() },
+                })
+              }
+            />
           ))}
         </ScrollView>
 
-        {/* Genres */}
         <Text style={styles.sectionTitle}>Genres</Text>
         <View style={styles.genresContainer}>
-          {genres.map((genre, index) => (
-            <Pressable
-              key={index}
-              style={({ pressed }) => [
-                styles.genreButton,
-                pressed && { backgroundColor: "#A095D1" },
-              ]}
-            >
-              <Text style={styles.genreText}>{genre}</Text>
-            </Pressable>
+          {genres.map((genre) => (
+            <GenreButton key={genre.genreId} genre={genre} />
           ))}
         </View>
       </ScrollView>
@@ -176,23 +189,6 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     textAlign: "center",
   },
-  genresContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  genreButton: {
-    backgroundColor: "#B5AFE0",
-    borderRadius: 2,
-    paddingVertical: 9,
-    paddingHorizontal: 13,
-    marginBottom: 2,
-  },
-  genreText: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
   bookPrice: {
     fontSize: 14,
     color: "#ffffff",
@@ -203,6 +199,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: "60%",
     marginTop: "auto",
+  },
+  genreButton: {
+    backgroundColor: "#B5AFE0",
+    borderRadius: 2,
+    paddingVertical: 9,
+    paddingHorizontal: 13,
+    marginBottom: 2,
+    marginRight: 8,
+  },
+  genreText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  genresContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
   },
 });
 
