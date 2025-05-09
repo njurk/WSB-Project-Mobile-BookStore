@@ -69,8 +69,8 @@ export default function ProfilePage() {
 
   const options: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }[] = [
     { icon: "person-outline", label: "Change Credentials", onPress: () => router.push("/CredentialsPage") },
-    { icon: "receipt-outline", label: "My Orders", onPress: () => {} },
-    { icon: "star-outline", label: "My Reviews", onPress: () => {} },
+    { icon: "receipt-outline", label: "My Orders", onPress: () => {}},
+    { icon: "star-outline", label: "My Reviews", onPress: () => router.push(`/MyReviewsPage?userId=${userId}`)  },
     { icon: "trash-outline", label: "Delete Account", onPress: handleDeleteAccount },
     { icon: "help-circle-outline", label: "Help / Contact Us", onPress: () => {} },
     { icon: "log-out-outline", label: "Log Out", onPress: handleLogout },

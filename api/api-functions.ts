@@ -54,7 +54,7 @@ export interface UserResponse {
   Username: string;
 }
 
-// user registration data type
+// user register data type
 export interface RegisterData {
   Email: string;
   Password: string;
@@ -130,20 +130,7 @@ export interface Book {
   averageRating?: number;
 }
 
-export interface Review {
-  reviewId: number;
-  bookId: number;
-  userId: number;
-  rating: number;
-  comment: string;
-  dateCreated: string;
-  user?: {
-    userId: number;
-    username: string;
-    email: string;
-  };
-}
-
+// Collection
 export interface Collection {
   collectionId: number;
   userId: number;
@@ -187,6 +174,7 @@ export async function deleteCollection(collectionId: number, userId: number): Pr
   if (!response.ok) throw new Error('Failed to delete collection');
 }
 
+// Cart
 export interface CartItem {
   cartId: number;
   userId: number;
@@ -237,6 +225,7 @@ export async function updateCartItemQuantity(cartId: number, quantity: number): 
   if (!response.ok) throw new Error("Failed to update quantity");
 }
 
+// User
 export async function deleteUser(userId: number): Promise<void> {
   const response = await fetch(`${API_URL}/api/User/${userId}`, {
     method: "DELETE",
@@ -275,3 +264,80 @@ export async function patchUserCredentials(
     }
   }
 }
+
+// Reviews
+export interface Review {
+  reviewId: number;
+  bookId: number;
+  userId: number;
+  rating: number;
+  comment: string;
+  dateCreated: string;
+  user?: { userId: number; username: string; email: string };
+  book?: { bookId: number; title: string; imageUrl: string };
+}
+
+export interface ReviewCreate {
+  bookId: number;
+  userId: number;
+  rating: number;
+  comment: string;
+}
+
+export async function postReview(review: ReviewCreate): Promise<Review | null> {
+  try {
+    const response = await fetch(`${API_URL}/api/Review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(review),
+    });
+    if (!response.ok) {
+      console.error("postReview failed:", response.status, await response.text());
+      return null;
+    }
+    return response.json();
+  } catch (error) {
+    console.error("postReview error:", error);
+    return null;
+  }
+}
+
+export async function getReviewsByUser(userId: number): Promise<Review[]> {
+  const response = await fetch(`${API_URL}/api/Review/user/${userId}`);
+  if (!response.ok) throw new Error("Failed to fetch reviews");
+  return response.json();
+}
+
+export async function deleteReview(reviewId: number): Promise<void> {
+  const response = await fetch(`${API_URL}/api/Review/${reviewId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error("Failed to delete review");
+}
+
+export interface ReviewPatch {
+  rating?: number;
+  comment?: string;
+}
+
+export async function patchReview(reviewId: number, data: ReviewPatch): Promise<Review | null> {
+  const response = await fetch(`${API_URL}/api/Review/${reviewId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    console.error("patchReview failed", response.status, response.statusText);
+    return null;
+  }
+
+  try {
+    const json = await response.json();
+    return json;
+  } catch (e) {
+    console.error("patchReview JSON parse error", e);
+    return null;
+  }
+}
+

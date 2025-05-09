@@ -1,10 +1,12 @@
 import * as React from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, Image, Alert } from "react-native";
+import {View, Text, ScrollView, Pressable, StyleSheet, Image, Alert, Modal,
+  TextInput,Button} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getResourceById, getCollectionByUserAndBook, postCollection, deleteCollection, postCartItem } from "../api/api-functions";
-import type { Book, Genre, Review, Collection } from "../api/api-functions";
+import {getResourceById, getCollectionByUserAndBook, postCollection, deleteCollection,
+  postCartItem, postReview} from "../api/api-functions";
+import type { Book, Genre, Review } from "../api/api-functions";
 import { API_URL } from "../api/api-connection";
 
 const BookDetailsPage: React.FC = () => {
@@ -17,6 +19,10 @@ const BookDetailsPage: React.FC = () => {
   const [saved, setSaved] = React.useState(false);
   const [userId, setUserId] = React.useState<number | null>(null);
   const [collectionId, setCollectionId] = React.useState<number | null>(null);
+  const [reviewModalVisible, setReviewModalVisible] = React.useState(false);
+  const [reviewRating, setReviewRating] = React.useState(0);
+  const [reviewComment, setReviewComment] = React.useState("");
+  const [submittingReview, setSubmittingReview] = React.useState(false);
 
   React.useEffect(() => {
     const loadUserId = async () => {
@@ -33,7 +39,7 @@ const BookDetailsPage: React.FC = () => {
 
   React.useEffect(() => {
     if (!id || userId === null) return;
-  
+
     const fetchBookAndSaved = async () => {
       try {
         setLoading(true);
@@ -54,13 +60,13 @@ const BookDetailsPage: React.FC = () => {
         setLoading(false);
       }
     };
-  
+
     fetchBookAndSaved();
   }, [id, userId]);
-  
+
   const handleSave = async () => {
     if (!book || userId === null) return;
-  
+
     if (!saved) {
       const savedCollection = await postCollection({ userId, bookId: book.bookId });
       if (savedCollection) {
@@ -70,7 +76,7 @@ const BookDetailsPage: React.FC = () => {
     } else {
       const collections = await getCollectionByUserAndBook(userId, book.bookId);
       if (!collections.length) return;
-  
+
       await deleteCollection(collections[0].collectionId, userId);
       setSaved(false);
       setCollectionId(null);
@@ -91,9 +97,47 @@ const BookDetailsPage: React.FC = () => {
     } catch (error) {
       console.error("Error adding to cart:", error);
     }
+  };
+
+  const handleAddReview = () => {
+    setReviewModalVisible(true);
+  };
+
+  const submitReview = async () => {
+    if (!book || userId === null) return;
+    if (reviewRating === 0) {
+      Alert.alert("Validation Error", "Please select a rating.");
+      return;
+    }
+    if (!reviewComment.trim()) {
+      Alert.alert("Validation Error", "Comment cannot be empty.");
+      return;
+    }
+    setSubmittingReview(true);
+    try {
+      const newReview = await postReview({
+        bookId: book.bookId,
+        userId,
+        rating: reviewRating,
+        comment: reviewComment.trim(),
+      });
+      if (newReview) {
+        setReviews((prev) => [newReview, ...prev]);
+        Alert.alert("Success", "Review added successfully.");
+        setReviewModalVisible(false);
+        setReviewRating(0);
+        setReviewComment("");
+      } else {
+        Alert.alert("Error", "Failed to add review.");
+      }
+    } catch (error) {
+      console.error("Error posting review:", error);
+      Alert.alert("Error", "Failed to add review.");
+    } finally {
+      setSubmittingReview(false);
+    }
   };  
-  
-  const handleAddReview = () => {};
+
   const handleBack = () => {
     router.back();
   };
@@ -186,6 +230,7 @@ const BookDetailsPage: React.FC = () => {
           ))}
         </View>
       </ScrollView>
+
       <View style={styles.stickyButtonsContainer}>
         <Pressable onPress={handleSave} style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.5 }]}>
           <Ionicons name={saved ? "heart" : "heart-outline"} size={40} color="#ffffff" />
@@ -194,6 +239,48 @@ const BookDetailsPage: React.FC = () => {
           <Text style={styles.addToCartText}>Add to Cart</Text>
         </Pressable>
       </View>
+
+      <Modal
+        visible={reviewModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setReviewModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Add Review</Text>
+
+            <Text style={styles.label}>Rating</Text>
+            <View style={{ flexDirection: "row", justifyContent: "center", marginBottom: 12 }}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Pressable key={star} onPress={() => setReviewRating(star)}>
+                  <Ionicons
+                    name={star <= reviewRating ? "star" : "star-outline"}
+                    size={32}
+                    color="#FFD700"
+                    style={{ marginHorizontal: 4 }}
+                  />
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={styles.label}>Comment</Text>
+            <TextInput
+              multiline
+              numberOfLines={4}
+              style={styles.textArea}
+              value={reviewComment}
+              onChangeText={setReviewComment}
+              placeholder="Write your review here..."
+            />
+
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 16 }}>
+              <Button title="Cancel" onPress={() => setReviewModalVisible(false)} />
+              <Button title={submittingReview ? "Submitting..." : "Submit"} onPress={submitReview} disabled={submittingReview} />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -347,6 +434,36 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    width: "90%",
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    padding: 20,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  label: {
+    fontWeight: "bold",
+    marginBottom: 6,
+  },
+  textArea: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 4,
+    padding: 10,
+    textAlignVertical: "top",
   },
 });
 
