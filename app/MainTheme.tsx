@@ -1,15 +1,15 @@
-import { DefaultTheme } from '@react-navigation/native';
+import { DarkTheme } from '@react-navigation/native';
 
 const MainTheme = {
-  ...DefaultTheme,
+  ...DarkTheme,
   colors: {
-    ...DefaultTheme.colors,
-    primary: '#786EB9',
-    background: '#786EB9',
-    card: '#786EB9',
-    text: '#ffffff',
-    border: '#786EB9',
-    notification: '#A095D1',
+    ...DarkTheme.colors,
+    primary: '#BB86FC',
+    background: '#121212',
+    card: '#7c4e9c',
+    text: '#FFFFFF',
+    border: '#272727',
+    notification: '#CF6679',
   },
 };
 

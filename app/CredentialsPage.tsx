@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from "react";
-import {Text,TextInput,StyleSheet,TouchableOpacity,Alert,ScrollView,KeyboardAvoidingView,Platform,Pressable} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { patchUserCredentials, UserPartialUpdateData } from "../api/api-functions";
+import React, { useEffect, useState } from "react";
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity } from "react-native";
+import { patchUserCredentials, UserPatchData } from "../api/api-functions";
 
 export default function CredentialsPage() {
   const router = useRouter();
@@ -60,7 +60,7 @@ export default function CredentialsPage() {
       return;
     }
 
-    const updateData: UserPartialUpdateData = {
+    const updateData: UserPatchData = {
         username: username.trim(),
         email: email.trim(),
         ...(password.trim() ? { password: password.trim() } : {}),

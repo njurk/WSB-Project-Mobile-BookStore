@@ -1,3 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
 import { API_URL } from './api-connection';
 
 export type ResourceId = string | number;
@@ -233,7 +235,7 @@ export async function deleteUser(userId: number): Promise<void> {
   if (!response.ok) throw new Error("Failed to delete user account");
 }
 
-export interface UserPartialUpdateData {
+export interface UserPatchData {
   username?: string;
   email?: string;
   password?: string;
@@ -244,7 +246,7 @@ export interface UserPartialUpdateData {
 
 export async function patchUserCredentials(
   userId: number,
-  data: UserPartialUpdateData,
+  data: UserPatchData,
   retries = 3
 ): Promise<void> {
   try {
@@ -309,10 +311,22 @@ export async function getReviewsByUser(userId: number): Promise<Review[]> {
 }
 
 export async function deleteReview(reviewId: number): Promise<void> {
-  const response = await fetch(`${API_URL}/api/Review/${reviewId}`, {
+  const userJson = await AsyncStorage.getItem("user");
+  const user = userJson ? JSON.parse(userJson) : null;
+  const userId = user?.userId;
+
+  if (!userId) {
+    Alert.alert("Error", "User not logged in");
+    return;
+  }
+
+  const response = await fetch(`${API_URL}/api/Review/${reviewId}?userId=${userId}`, {
     method: "DELETE",
   });
-  if (!response.ok) throw new Error("Failed to delete review");
+
+  if (!response.ok) {
+    throw new Error("Failed to delete review");
+  }
 }
 
 export interface ReviewPatch {
@@ -320,24 +334,58 @@ export interface ReviewPatch {
   comment?: string;
 }
 
-export async function patchReview(reviewId: number, data: ReviewPatch): Promise<Review | null> {
+export async function patchReview(reviewId: number, data: { rating?: number; comment?: string }) {
+  const userJson = await AsyncStorage.getItem("user");
+  const user = userJson ? JSON.parse(userJson) : null;
+  const userId = user?.userId;
+
   const response = await fetch(`${API_URL}/api/Review/${reviewId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, userId }),
   });
-
-  if (!response.ok) {
-    console.error("patchReview failed", response.status, response.statusText);
-    return null;
-  }
-
-  try {
-    const json = await response.json();
-    return json;
-  } catch (e) {
-    console.error("patchReview JSON parse error", e);
-    return null;
-  }
+  if (!response.ok) throw new Error("Failed to update review");
+  return await response.json();
 }
 
+export interface BookGenreDto {
+  BookId: number;
+  GenreId: number;
+}
+
+export function filterBooksByGenres(
+  books: Book[],
+  bookGenres: BookGenreDto[],
+  selectedGenres: Set<number>,
+  searchTerm: string
+): Book[] {
+  const lowerSearch = searchTerm.trim().toLowerCase();
+
+  if (selectedGenres.size === 0) {
+    return books.filter(book =>
+      book.title.toLowerCase().includes(lowerSearch)
+    );
+  }
+
+  return books.filter(book => {
+    if (!book.title.toLowerCase().includes(lowerSearch)) return false;
+
+    const genresForBook = new Set(
+      bookGenres
+        .filter(bg => bg.BookId === book.bookId)
+        .map(bg => bg.GenreId)
+    );
+
+    console.log(`Book: ${book.title}`);
+  console.log('Genres for book:', [...genresForBook]);
+  console.log('Selected genres:', [...selectedGenres]);
+
+    for (const genreId of selectedGenres) {
+      if (genresForBook.has(genreId)) {
+        return true; 
+      }
+    }
+
+    return false;
+  });
+}

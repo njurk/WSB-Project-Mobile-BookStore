@@ -1,50 +1,61 @@
-import * as React from "react";
-import { View, Text, ScrollView, Pressable, TextInput, Image, StyleSheet, Alert } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useState, useEffect } from "react";
-import { getResource } from "../../api/api-functions";
-import type { Book, Genre } from "../../api/api-functions";
-import { API_URL } from "../../api/api-connection";
+import CarouselBookCard from "@/components/CarouselBookCard";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect, useTheme } from "@react-navigation/native";
 import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Alert,
+  Dimensions,
+  FlatList,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
+} from "react-native";
+import type { Book, Genre } from "../../api/api-functions";
+import {
+  deleteCollection,
+  getCollectionByUser,
+  getResource,
+  postCartItem,
+  postCollection,
+} from "../../api/api-functions";
 
-const BookCard = ({ book, onPress }: { book: Book; onPress: () => void }) => {
-  return (
-    <Pressable style={styles.bookCard} android_ripple={{ color: "#A095D1" }} onPress={onPress}>
-      <Image source={{ uri: `${API_URL}/images/${book.imageUrl}` }} style={styles.bookImage} />
-      <Text style={styles.bookTitle} numberOfLines={2}>{book.title}</Text>
-      <Text style={styles.bookPrice}>
-        ${book.price != null ? book.price.toFixed(2) : "0.00"}
-      </Text>
-      <View style={styles.bookActions}>
-        <Pressable style={styles.iconButton} android_ripple={{ color: "#ccc" }}>
-          <Ionicons name="cart-outline" size={22} color="#ffffff" />
-        </Pressable>
-        <Pressable style={styles.iconButton} android_ripple={{ color: "#ccc" }}>
-          <Ionicons name="heart-outline" size={22} color="#ffffff" />
-        </Pressable>
-      </View>
-    </Pressable>
-  );
-};
+const windowWidth = Dimensions.get("window").width;
+const carouselItemWidth = windowWidth * 0.6;
+const carouselItemMargin = 12;
 
-const GenreButton = ({ genre }: { genre: Genre }) => {
-  return (
-    <Pressable style={styles.genreButton} android_ripple={{ color: "#A095D1" }}>
-      <Text style={styles.genreText}>{genre.name}</Text>
-    </Pressable>
-  );
-};
+const AUTO_SCROLL_INTERVAL = 4000;
 
 const HomePage: React.FC = () => {
   const router = useRouter();
+  const { colors } = useTheme();
+
   const [featuredBooks, setFeaturedBooks] = useState<Book[]>([]);
   const [genres, setGenres] = useState<Genre[]>([]);
+  const [userId, setUserId] = useState<number | null>(null);
+  const [savedBookIds, setSavedBookIds] = useState<Set<number>>(new Set());
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  const flatListRef = useRef<FlatList<Book>>(null);
 
   useEffect(() => {
+    const loadUserId = async () => {
+      try {
+        const userJson = await AsyncStorage.getItem("user");
+        if (userJson) {
+          const user = JSON.parse(userJson);
+          setUserId(user.userId);
+        }
+      } catch (error) {
+        console.error("Failed to load user", error);
+      }
+    };
+
     const fetchFeaturedBooks = async () => {
       try {
         const books = await getResource<Book[]>("Book");
-        setFeaturedBooks(books);
+        setFeaturedBooks(books.slice(0, 10));
       } catch (error) {
         Alert.alert("Error", "Failed to load featured books.");
         console.error(error);
@@ -61,49 +72,163 @@ const HomePage: React.FC = () => {
       }
     };
 
+    loadUserId();
     fetchFeaturedBooks();
     fetchGenres();
   }, []);
 
+  useEffect(() => {
+    if (!userId) return;
+
+    const fetchUserCollections = async () => {
+      try {
+        const collections = await getCollectionByUser(userId);
+        const bookIds = new Set(collections.map((c) => c.bookId));
+        setSavedBookIds(bookIds);
+      } catch (error) {
+        console.error("Failed to load user collections", error);
+      }
+    };
+
+    fetchUserCollections();
+  }, [userId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!userId) return;
+      getCollectionByUser(userId).then((collections) => {
+        setSavedBookIds(new Set(collections.map((c) => c.bookId)));
+      }).catch(console.error);
+    }, [userId])
+  );
+
+  useEffect(() => {
+    if (featuredBooks.length === 0) return;
+
+    const interval = setInterval(() => {
+      let nextIndex = currentIndex + 1;
+      if (nextIndex >= featuredBooks.length) {
+        nextIndex = 0;
+      }
+      setCurrentIndex(nextIndex);
+      flatListRef.current?.scrollToIndex({ 
+        index: nextIndex, 
+        animated: true,
+        viewPosition: 0.5,
+      });
+    }, AUTO_SCROLL_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [currentIndex, featuredBooks.length]);
+
+  const handleToggleSave = useCallback(async (bookId: number, currentlySaved: boolean) => {
+    if (!userId) {
+      Alert.alert("Error", "You must be logged in to save books.");
+      return;
+    }
+    try {
+      if (currentlySaved) {
+        const collections = await getCollectionByUser(userId);
+        const collection = collections.find((c) => c.bookId === bookId);
+        if (collection) {
+          await deleteCollection(collection.collectionId, userId);
+          setSavedBookIds((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(bookId);
+            return newSet;
+          });
+        }
+      } else {
+        const savedCollection = await postCollection({ userId, bookId });
+        if (savedCollection) setSavedBookIds((prev) => new Set(prev).add(bookId));
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to update collection.");
+    }
+  }, [userId]);
+
+  const handleAddToCart = useCallback(async (bookId: number) => {
+    if (!userId) {
+      Alert.alert("Error", "You must be logged in to add to cart.");
+      return;
+    }
+    try {
+      const addedItem = await postCartItem({
+        userId,
+        bookId,
+        quantity: 1,
+      });
+      if (addedItem) {
+        Alert.alert("Added to Cart", "Book added to cart");
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to add to cart.");
+    }
+  }, [userId]);
+
+  const onViewRef = useRef(({ viewableItems }: any) => {
+    if (viewableItems.length > 0) {
+      setCurrentIndex(viewableItems[0].index);
+    }
+  });
+  const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 50 });
+
+  const renderItem = useCallback(({ item }: { item: Book }) => (
+    <CarouselBookCard
+      book={item}
+      saved={savedBookIds.has(item.bookId)}
+      onToggleSave={handleToggleSave}
+      onAddToCart={handleAddToCart}
+      onPress={() =>
+        router.push({
+          pathname: "/BookDetailsPage",
+          params: { id: item.bookId.toString() },
+        })
+      }
+      style={{
+        width: carouselItemWidth,
+        marginHorizontal: carouselItemMargin,
+      }}
+    />
+  ), [savedBookIds, handleToggleSave, handleAddToCart, router]);
+
   return (
-    <View style={styles.container}>
-      <View style={styles.navbar}>
-        <Text style={styles.logo}>BookStore</Text>
-        <Pressable style={styles.iconButton} android_ripple={{ color: "#ccc" }}>
-          <Ionicons name="cart-outline" size={24} color="#ffffff" />
-        </Pressable>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.navbar, { backgroundColor: colors.card }]}>
+        <Text style={[styles.logo, { color: colors.text }]}>BookStore</Text>
       </View>
-
-      <View style={styles.searchBar}>
-        <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
-        <TextInput
-          placeholder="Search books..."
-          placeholderTextColor="#999"
-          style={styles.searchInput}
-        />
+      <View style={[styles.discountBanner, { backgroundColor: 'rgba(187, 134, 252, 0.1)' }]}>
+        <Text style={[styles.discountText, { color: colors.primary }]}>
+          Father's Day Special! Enjoy up to 30% off on all books with code SPECIAL30
+        </Text>
       </View>
-
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>Popular</Text>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.sectionTitle}>Featured Books</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.featuredScroll}>
-          {featuredBooks.map((book) => (
-            <BookCard
-              key={book.bookId}
-              book={book}
-              onPress={() =>
-                router.push({
-                  pathname: "/BookDetailsPage",
-                  params: { id: book.bookId.toString() },
-                })
-              }
-            />
-          ))}
-        </ScrollView>
+        <FlatList
+          ref={flatListRef}
+          data={featuredBooks}
+          horizontal
+          pagingEnabled
+          snapToAlignment="center"
+          snapToInterval={carouselItemWidth + carouselItemMargin * 2}
+          decelerationRate="fast"
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(item) => item.bookId.toString()}
+          contentContainerStyle={{ paddingHorizontal: carouselItemMargin }}
+          renderItem={renderItem}
+          onViewableItemsChanged={onViewRef.current}
+          viewabilityConfig={viewConfigRef.current}
+        />
 
-        <Text style={styles.sectionTitle}>Genres</Text>
-        <View style={styles.genresContainer}>
-          {genres.map((genre) => (
-            <GenreButton key={genre.genreId} genre={genre} />
+        <View style={styles.paginationContainer}>
+          {featuredBooks.map((_, index) => (
+            <View
+              key={index}
+              style={[
+                styles.paginationDot,
+                index === currentIndex ? { backgroundColor: colors.primary } : { backgroundColor: colors.border },
+              ]}
+            />
           ))}
         </View>
       </ScrollView>
@@ -114,108 +239,54 @@ const HomePage: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#786EB9",
   },
   navbar: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "center",
     paddingHorizontal: 16,
     paddingTop: 48,
     paddingBottom: 16,
-    backgroundColor: "#786EB9",
   },
   logo: {
-    color: "#ffffff",
-    fontSize: 20,
+    fontSize: 30,
     fontWeight: "bold",
-  },
-  iconButton: {
-    padding: 8,
-    justifyContent: "center",
-    alignItems: "center",
-    width: 40,
-    height: 40,
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#ffffff",
-    height: 50,
-    borderRadius: 2,
-    paddingHorizontal: 16,
-    paddingVertical: 2,
-    marginHorizontal: 16,
-    marginTop: 8,
-    elevation: 4,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: "#333",
   },
   scrollContent: {
     paddingHorizontal: 16,
     paddingBottom: 24,
   },
   sectionTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginVertical: 16,
+    alignSelf: "center",
+    marginTop: 30,
+  },
+  discountBanner: {
+    width: "100%",
+    paddingVertical: 18,
+    marginTop: 30,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 8,
+  },
+  discountText: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#ffffff",
-    marginVertical: 16,
-  },
-  featuredScroll: {
-    marginBottom: 24,
-  },
-  bookCard: {
-    width: 120,
-    marginRight: 16,
-    alignItems: "center",
-    backgroundColor: "#786EB9",
-    borderRadius: 8,
-    padding: 8,
-  },
-  bookImage: {
-    width: 100,
-    height: 150,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  bookTitle: {
-    fontSize: 14,
-    color: "#ffffff",
     textAlign: "center",
   },
-  bookPrice: {
-    fontSize: 14,
-    color: "#ffffff",
-    marginBlock: 4,
-  },
-  bookActions: {
+  paginationContainer: {
     flexDirection: "row",
     justifyContent: "center",
-    width: "60%",
-    marginTop: "auto",
+    marginTop: 12,
+    marginBottom: 24,
   },
-  genreButton: {
-    backgroundColor: "#B5AFE0",
-    borderRadius: 2,
-    paddingVertical: 9,
-    paddingHorizontal: 13,
-    marginBottom: 2,
-    marginRight: 8,
-  },
-  genreText: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  genresContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+  paginationDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginHorizontal: 6,
   },
 });
 

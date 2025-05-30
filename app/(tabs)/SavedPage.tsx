@@ -1,14 +1,15 @@
-import * as React from "react";
-import { View, Text, ScrollView, Pressable, Image, StyleSheet, Alert, ActivityIndicator } from "react-native";
+import { API_URL } from "@/api/api-connection";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect, useTheme } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { getCollectionByUser, deleteCollection, postCartItem } from "../../api/api-functions";
+import * as React from "react";
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { Collection } from "../../api/api-functions";
-import { useFocusEffect } from "@react-navigation/native";
-import { API_URL } from "@/api/api-connection";
+import { deleteCollection, getCollectionByUser, postCartItem } from "../../api/api-functions";
 
 const SavedPage: React.FC = () => {
+  const { colors } = useTheme();
   const [savedBooks, setSavedBooks] = React.useState<Collection[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [userId, setUserId] = React.useState<number | null>(null);
@@ -52,14 +53,8 @@ const SavedPage: React.FC = () => {
     if (userId === null) return;
     try {
       const addedItem = await postCartItem({ userId, bookId, quantity: 1 });
-      if (addedItem) {
-        Alert.alert("Success", "Book added to cart.");
-      } else {
-        Alert.alert("Error", "Failed to add book to cart.");
-      }
     } catch (error) {
-      console.error("Error adding to cart:", error);
-      Alert.alert("Error", "Failed to add book to cart.");
+      console.error("Failed to add book to cart", error);
     }
   };
 
@@ -71,31 +66,28 @@ const SavedPage: React.FC = () => {
 
       await deleteCollection(collectionToDelete.collectionId, userId);
       setSavedBooks(prev => prev.filter(c => c.bookId !== bookId));
-      Alert.alert("Deleted", "Book removed from collection");
     } catch (error) {
-      console.error("Failed to delete book", error);
-      Alert.alert("Error", "Failed to remove book from collection.");
     }
   };
 
   if (loading) {
     return (
-      <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
-        <ActivityIndicator size="large" color="#ffffff" />
+      <View style={[styles.container, { justifyContent: "center", alignItems: "center", backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.navbar}>
-        <Text style={styles.logo}>Your saved books</Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.navbar, { backgroundColor: colors.card }]}>
+        <Text style={[styles.logo, { color: colors.text }]}>Saved</Text>
       </View>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {savedBooks.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="book-outline" size={64} color="#ffffff" style={{ marginBottom: 16 }} />
-            <Text style={styles.emptyText}>No saved books yet.</Text>
+            <Ionicons name="book-outline" size={64} color={colors.text} style={{ marginBottom: 16 }} />
+            <Text style={[styles.emptyText, { color: colors.text }]}>No saved books yet.</Text>
           </View>
         ) : (
           savedBooks.map((collection) => {
@@ -103,17 +95,17 @@ const SavedPage: React.FC = () => {
             return (
               <Pressable
                 key={collection.collectionId}
-                style={({ pressed }) => [
+                style={({pressed}) => [
                   styles.bookItem,
-                  pressed && { backgroundColor: "#A095D1" },
+                  { opacity: pressed ? 0.5 : 1 },
                 ]}
                 onPress={() => handleBookPress(book.bookId)}
               >
-                <Image source={{ uri: `${API_URL}/images/${book.imageUrl}` }} style={styles.bookImage} />
+                <Image source={{ uri: `${API_URL}/images/${book.imageUrl}` }} style={[styles.bookImage, { backgroundColor: colors.border }]} />
                 
                 <View style={styles.bookInfo}>
-                  <Text style={styles.bookTitle} numberOfLines={2}>{book.title}</Text>
-                  <Text style={styles.bookPrice}>${book.price.toFixed(2)}</Text>
+                  <Text style={[styles.bookTitle, { color: colors.text }]} numberOfLines={2}>{book.title}</Text>
+                  <Text style={[styles.bookPrice, { color: colors.text }]}>${book.price.toFixed(2)}</Text>
                 </View>
 
                 <View style={styles.actionButtons}>
@@ -121,19 +113,19 @@ const SavedPage: React.FC = () => {
                     onPress={() => handleAddToCart(book.bookId)}
                     style={({ pressed }) => [
                       styles.iconButton,
-                      pressed && { opacity: 0.5 },
+                      { opacity: pressed ? 0.5 : 1 },
                     ]}
                   >
-                    <Ionicons name="cart-outline" size={24} color="#ffffff" />
+                    <Ionicons name="cart-outline" size={28} color={colors.text} />
                   </Pressable>
                   <Pressable
                     onPress={() => handleDelete(book.bookId)}
                     style={({ pressed }) => [
                       styles.iconButton,
-                      pressed && { opacity: 0.5 },
+                      { opacity: pressed ? 0.5 : 1 },
                     ]}
                   >
-                    <Ionicons name="trash-outline" size={24} color="#ffffff" />
+                    <Ionicons name="trash-outline" size={28} color={colors.text} />
                   </Pressable>
                 </View>
               </Pressable>
@@ -148,7 +140,6 @@ const SavedPage: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#786EB9",
   },
   navbar: {
     flexDirection: "row",
@@ -156,11 +147,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingTop: 48,
     paddingBottom: 16,
-    backgroundColor: "#786EB9",
   },
   logo: {
-    color: "#ffffff",
-    fontSize: 20,
+    fontSize: 26,
     fontWeight: "bold",
   },
   scrollContent: {
@@ -171,34 +160,31 @@ const styles = StyleSheet.create({
   bookItem: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#786EB9",
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
   },
   bookImage: {
-    width: 60,
-    height: 90,
-    borderRadius: 8,
+    width: 75,
+    height: 110,
+    borderRadius: 5,
     marginRight: 12,
-    backgroundColor: "#A095D1",
   },
   bookInfo: {
     flex: 1,
     justifyContent: "center",
   },
   bookTitle: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#ffffff",
+    fontSize: 17,
+    fontWeight: "bold",
     marginBottom: 4,
   },
   bookPrice: {
-    fontSize: 14,
-    color: "#E5E2F3",
+    fontSize: 16,
+    marginTop: 4,
   },
   actionButtons: {
-    flexDirection: "column",
+    flexDirection: "row",
     justifyContent: "space-between",
     marginLeft: 8,
   },
@@ -213,7 +199,6 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
-    color: "#ffffff",
     textAlign: "center",
   },
 });

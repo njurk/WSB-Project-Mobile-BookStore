@@ -1,10 +1,10 @@
-import * as React from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, Image, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getCartByUserId, deleteCartItem, updateCartItemQuantity, CartItem } from "../../api/api-functions";
+import { useFocusEffect, useTheme } from '@react-navigation/native';
+import * as React from "react";
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { API_URL } from "../../api/api-connection";
-import { useFocusEffect } from '@react-navigation/native';
+import { CartItem, deleteCartItem, getCartByUserId, updateCartItemQuantity } from "../../api/api-functions";
 
 const CartPage: React.FC = () => {
   const [cartItems, setCartItems] = React.useState<Array<CartItem>>([]);
@@ -85,84 +85,86 @@ const CartPage: React.FC = () => {
     );
   };
 
+  const { colors } = useTheme();
+
   if (loading) {
     return (
-      <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
-        <ActivityIndicator size="large" color="#ffffff" />
+      <View style={[styles.container, { justifyContent: "center", alignItems: "center", backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.text} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.navbar}>
-        <Text style={styles.logo}>Your Cart</Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.navbar, { backgroundColor: colors.card }]}>
+        <Text style={[styles.logo, { color: colors.text }]}>Cart</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} style={[styles.scrollView]}>
         {cartItems.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="cart-outline" size={64} color="#ffffff" style={{ marginBottom: 16 }} />
-            <Text style={styles.emptyText}>Your cart is empty.</Text>
+            <Ionicons name="cart-outline" size={64} color={colors.text} style={{ marginBottom: 16 }} />
+            <Text style={[styles.emptyText, { color: colors.text }]}>Your cart is empty.</Text>
           </View>
         ) : (
           cartItems.map((item) => (
-            <View key={item.cartId} style={styles.cartItem}>
+            <View key={item.cartId} style={[styles.cartItem]}>
               <Pressable
                 onPress={() => handleRemoveItem(item.cartId)}
                 style={({ pressed }) => [
                   styles.removeButton,
-                  pressed && { opacity: 0.5 },
+                  { opacity: pressed ? 0.5 : 1 },
                 ]}
               >
-                <Ionicons name="trash-outline" size={24} color="#ffffff" />
+              <Ionicons name="trash-outline" size={28} color={colors.text} />
               </Pressable>
-          
+
               <Image source={{ uri: `${API_URL}/images/${item.book.imageUrl}` }} style={styles.cartItemImage} />
               <View style={styles.cartItemInfo}>
-                <Text style={styles.cartItemTitle}>{item.book?.title ?? "No Title"}</Text>
+                <Text style={[styles.cartItemTitle, { color: colors.text }]}>{item.book?.title ?? "No Title"}</Text>
                 <View style={styles.quantityContainer}>
                   <Pressable
                     onPress={() => handleDecreaseQuantity(item.cartId)}
                     style={({ pressed }) => [
                       styles.quantityButton,
-                      pressed && { opacity: 0.5 },
+                      { opacity: pressed ? 0.5 : 1 },
                     ]}
                   >
-                    <Ionicons name="remove-outline" size={20} color="#ffffff" />
+                    <Ionicons name="remove-outline" size={20} color={colors.text} />
                   </Pressable>
-                  <Text style={styles.quantityText}>{item.quantity}</Text>
+                  <Text style={[styles.quantityText, { color: colors.text }]}>{item.quantity}</Text>
                   <Pressable
                     onPress={() => handleIncreaseQuantity(item.cartId)}
                     style={({ pressed }) => [
                       styles.quantityButton,
-                      pressed && { opacity: 0.5 },
+                      { opacity: pressed ? 0.5 : 1 },
                     ]}
                   >
-                    <Ionicons name="add-outline" size={20} color="#ffffff" />
+                    <Ionicons name="add-outline" size={20} color={colors.text} />
                   </Pressable>
                 </View>
               </View>
-        
-              <Text style={styles.cartItemPrice}>${(item.book?.price ?? 0).toFixed(2)}</Text>
+
+              <Text style={[styles.cartItemPrice, { color: colors.text }]}>${(item.book?.price ?? 0).toFixed(2)}</Text>
             </View>
           ))
         )}
-        
-        {cartItems.length > 0 && (
-          <View style={styles.totalContainer}>
-            <Text style={styles.totalText}>Total: ${calculateTotal().toFixed(2)}</Text>
-            <Pressable
-              style={({ pressed }) => [
-                styles.checkoutButton,
-                pressed && { opacity: 0.5 },
-              ]}
-            >
-              <Text style={styles.checkoutText}>Proceed to Checkout</Text>
-            </Pressable>
-          </View>
-        )}
       </ScrollView>
+
+      {cartItems.length > 0 && (
+        <View style={[styles.totalContainer, { backgroundColor: colors.card }]}>
+          <Text style={[styles.totalText, { color: colors.text }]}>Total: ${calculateTotal().toFixed(2)}</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.checkoutButton,
+              { backgroundColor: colors.primary, opacity: pressed ? 0.5 : 1 },
+            ]}
+          >
+            <Text style={[styles.checkoutText, { color: colors.text }]}>Checkout</Text>
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 };
@@ -170,7 +172,7 @@ const CartPage: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#786EB9",
+    flexDirection: "column",
   },
   navbar: {
     flexDirection: "row",
@@ -178,12 +180,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingTop: 48,
     paddingBottom: 16,
-    backgroundColor: "#786EB9",
   },
   logo: {
-    color: "#ffffff",
-    fontSize: 20,
+    fontSize: 26,
     fontWeight: "bold",
+  },
+  scrollView: {
+    flex: 1,
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -198,13 +201,11 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
-    color: "#ffffff",
     textAlign: "center",
   },
   cartItem: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#786EB9",
     borderRadius: 2,
     padding: 12,
     marginBottom: 16,
@@ -223,9 +224,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   cartItemTitle: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#ffffff",
+    fontSize: 17,
+    fontWeight: "400",
     marginBottom: 4,
   },
   quantityContainer: {
@@ -234,45 +234,40 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   quantityButton: {
-    backgroundColor: "#A095D1",
     padding: 6,
     borderRadius: 2,
     marginHorizontal: 8,
   },
   quantityText: {
     fontSize: 16,
-    color: "#ffffff",
   },
   cartItemPrice: {
-    fontSize: 14,
-    color: "#E5E2F3",
+    fontSize: 18,
+    fontWeight: "500",
     marginLeft: 12,
   },
   totalContainer: {
-    width: "100%",
-    backgroundColor: "#A095D1",
-    borderRadius: 2,
     padding: 12,
     alignItems: "center",
+    borderTopLeftRadius: 15,
+    borderTopRightRadius: 15,
+    paddingBottom: 20,
   },
   totalText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "bold",
-    color: "#ffffff",
     marginBottom: 12,
   },
   checkoutButton: {
     width: "100%",
-    backgroundColor: "#E5E2F3",
-    borderRadius: 2,
+    borderRadius: 8,
     paddingVertical: 10,
     paddingHorizontal: 20,
   },
   checkoutText: {
     textAlign: "center",
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#786EB9",
+    fontSize: 20,
+    fontWeight: "bold",
   },
 });
 

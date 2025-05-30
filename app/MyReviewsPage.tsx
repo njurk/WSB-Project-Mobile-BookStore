@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from "react";
-import {View,Text,FlatList,TouchableOpacity,StyleSheet,Alert,ActivityIndicator, Button, Modal, Pressable, TextInput, Image} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { getReviewsByUser, deleteReview, patchReview  } from "../api/api-functions";
-import type { Review } from "../api/api-functions"; 
-import { useTheme } from "@react-navigation/native";
 import { API_URL } from "@/api/api-connection";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "@react-navigation/native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, Alert, Button, FlatList, Image, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import type { Review } from "../api/api-functions";
+import { deleteReview, getReviewsByUser, patchReview } from "../api/api-functions";
 
 export default function MyReviewsPage() {
     const { colors } = useTheme();
@@ -161,7 +161,7 @@ export default function MyReviewsPage() {
                       </Text>
                       <View style={styles.iconStack}>
                         <TouchableOpacity onPress={() => openEditModal(item)} style={styles.iconButton}>
-                          <Ionicons name="create" size={24} color="#FFFFFF" />
+                          <Ionicons name="create-outline" size={24} color="#FFFFFF" />
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => handleDelete(item.reviewId)} style={styles.iconButton}>
                           <Ionicons name="trash-outline" size={24} color="#FFFFFF" />
@@ -172,7 +172,7 @@ export default function MyReviewsPage() {
                   {!item.book && (
                     <View style={styles.iconStackFallback}>
                       <TouchableOpacity onPress={() => openEditModal(item)} style={styles.iconButton}>
-                        <Ionicons name="create" size={24} color="#FFFFFF" />
+                        <Ionicons name="create-outline" size={24} color="#FFFFFF" />
                       </TouchableOpacity>
                       <TouchableOpacity onPress={() => handleDelete(item.reviewId)} style={styles.iconButton}>
                         <Ionicons name="trash-outline" size={24} color="#FFFFFF" />
@@ -180,9 +180,17 @@ export default function MyReviewsPage() {
                     </View>
                   )}
                   <View style={styles.reviewContent}>
-                    <Text style={[styles.ratingText, { color: colors.text }]}>
-                      Rating: {item.rating} / 5
-                    </Text>
+                    <View style={styles.starRating}>
+                      {[...Array(5)].map((_, i) => (
+                        <Ionicons
+                          key={i}
+                          name={i < item.rating ? "star" : "star-outline"}
+                          size={20}
+                          color="#FFD700"
+                          style={{ marginRight: 2 }}
+                        />
+                      ))}
+                    </View>
                     <Text style={[styles.commentText, { color: colors.text }]}>{item.comment}</Text>
                     <Text style={[styles.dateText, { color: colors.text }]}>
                       {new Date(item.dateCreated).toLocaleDateString()}
@@ -315,9 +323,8 @@ export default function MyReviewsPage() {
     reviewContent: {
       marginTop: 8,
     },
-    ratingText: {
-      fontWeight: "bold",
-      fontSize: 16,
+    starRating: {
+      flexDirection: "row",
       marginBottom: 6,
     },
     commentText: {

@@ -1,17 +1,38 @@
-import * as React from "react";
-import {View, Text, ScrollView, Pressable, StyleSheet, Image, Alert, Modal,
-  TextInput,Button} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {getResourceById, getCollectionByUserAndBook, postCollection, deleteCollection,
-  postCartItem, postReview} from "../api/api-functions";
-import type { Book, Genre, Review } from "../api/api-functions";
+import { useTheme } from "@react-navigation/native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import * as React from "react";
+import {
+  Alert,
+  Button,
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from "react-native";
 import { API_URL } from "../api/api-connection";
+import type { Book, Genre, Review } from "../api/api-functions";
+import {
+  deleteCollection,
+  deleteReview,
+  getCollectionByUserAndBook,
+  getResourceById,
+  patchReview,
+  postCartItem,
+  postCollection,
+  postReview
+} from "../api/api-functions";
 
 const BookDetailsPage: React.FC = () => {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { colors } = useTheme();
+
   const [book, setBook] = React.useState<Book | null>(null);
   const [genres, setGenres] = React.useState<Genre[]>([]);
   const [reviews, setReviews] = React.useState<Review[]>([]);
@@ -23,6 +44,7 @@ const BookDetailsPage: React.FC = () => {
   const [reviewRating, setReviewRating] = React.useState(0);
   const [reviewComment, setReviewComment] = React.useState("");
   const [submittingReview, setSubmittingReview] = React.useState(false);
+  const [editingReviewId, setEditingReviewId] = React.useState<number | null>(null);
 
   React.useEffect(() => {
     const loadUserId = async () => {
@@ -113,30 +135,44 @@ const BookDetailsPage: React.FC = () => {
       Alert.alert("Validation Error", "Comment cannot be empty.");
       return;
     }
+
     setSubmittingReview(true);
+
     try {
-      const newReview = await postReview({
-        bookId: book.bookId,
-        userId,
-        rating: reviewRating,
-        comment: reviewComment.trim(),
-      });
-      if (newReview) {
-        setReviews((prev) => [newReview, ...prev]);
-        Alert.alert("Success", "Review added successfully.");
-        setReviewModalVisible(false);
-        setReviewRating(0);
-        setReviewComment("");
+      if (editingReviewId !== null) {
+        const updated = await patchReview(editingReviewId, {
+          rating: reviewRating,
+          comment: reviewComment.trim(),
+        });
+        if (updated) {
+          setReviews(prev =>
+            prev.map(r => (r.reviewId === editingReviewId ? { ...r, ...updated } : r))
+          );
+          Alert.alert("Success", "Review updated.");
+        }
       } else {
-        Alert.alert("Error", "Failed to add review.");
+        const newReview = await postReview({
+          bookId: book.bookId,
+          userId,
+          rating: reviewRating,
+          comment: reviewComment.trim(),
+        });
+        if (newReview) {
+          setReviews(prev => [newReview, ...prev]);
+          Alert.alert("Success", "Review added.");
+        }
       }
+      setReviewModalVisible(false);
+      setReviewRating(0);
+      setReviewComment("");
+      setEditingReviewId(null);
     } catch (error) {
-      console.error("Error posting review:", error);
-      Alert.alert("Error", "Failed to add review.");
+      console.error("Review submission error:", error);
+      Alert.alert("Error", "Failed to submit review.");
     } finally {
       setSubmittingReview(false);
     }
-  };  
+  };
 
   const handleBack = () => {
     router.back();
@@ -144,99 +180,156 @@ const BookDetailsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <Text style={{ color: "#fff" }}>Loading book details...</Text>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <Text style={{ color: colors.text }}>Loading book details...</Text>
       </View>
     );
   }
 
   if (!book) {
     return (
-      <View style={styles.center}>
-        <Text style={{ color: "#fff" }}>Book not found.</Text>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <Text style={{ color: colors.text }}>Book not found.</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Pressable onPress={handleBack} style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.5 }]}>
-        <Ionicons name="arrow-back" size={30} color="#ffffff" />
+        <Ionicons name="arrow-back" size={30} color={colors.text} />
       </Pressable>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Image source={{ uri: `${API_URL}/images/${book.imageUrl}` }} style={styles.bookCover} />
+        <Image source={{ uri: `${API_URL}/images/${book.imageUrl}` }} style={[styles.bookCover, { borderColor: colors.border }]} />
 
         <View style={styles.bookInfo}>
-          <Text style={styles.bookTitle}>{book.title}</Text>
-          <Text style={styles.bookAuthor}>
+          <Text style={[styles.bookTitle, { color: colors.text }]}>{book.title}</Text>
+          <Text style={[styles.bookAuthor, { color: colors.text }]}>
             {book.author ? `${book.author.firstName ?? ""} ${book.author.lastName ?? ""}`.trim() : ""}
           </Text>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={styles.bookPrice}>${book.price.toFixed(2)}</Text>
+            <Text style={[styles.bookPrice, { color: colors.text }]}>${book.price.toFixed(2)}</Text>
             {book.averageRating && book.averageRating > 0 && (
               <View style={{ flexDirection: "row", alignItems: "center", marginRight: 5 }}>
                 <Ionicons name="star" size={25} color="#FFD700" />
-                <Text style={{ color: "#E5E2F3", fontSize: 18, fontWeight: "bold", marginLeft: 4 }}>
-                  {book.averageRating.toFixed(1)}
-                </Text>
+                <Text style={[styles.ratingText, { color: colors.text }]}>{book.averageRating.toFixed(1)}</Text>
               </View>
             )}
           </View>
         </View>
         <View style={styles.genresContainer}>
           {genres.map((genre) => (
-            <View key={genre.genreId} style={styles.genreBubble}>
-              <Text style={styles.genreText}>{genre.name}</Text>
+            <View key={genre.genreId} style={[styles.genreBubble, { backgroundColor: colors.card }]}>
+              <Text style={[styles.genreText, { color: colors.text }]}>{genre.name}</Text>
             </View>
           ))}
         </View>
 
-        <Text style={styles.descriptionText}>{book.description}</Text>
+        <Text style={[styles.descriptionText, { color: colors.text }]}>{book.description}</Text>
 
-        <View style={styles.bookDetails}>
-          <Text style={styles.bookTitle}>Details</Text>
-          <Text style={styles.bookDetailText}>Year Published: {book.yearPublished}</Text>
-          <Text style={styles.bookDetailText}>Pages: {book.numberOfPages}</Text>
-          <Text style={styles.bookDetailText}>Language: {book.language}</Text>
-          <Text style={styles.bookDetailText}>ISBN: {book.isbn}</Text>
+        <View style={[styles.bookDetails, { borderColor: colors.primary, borderWidth: 1 }]}>
+          <Text style={[styles.bookTitle, { color: colors.text }]}>Details</Text>
+          <Text style={[styles.bookDetailText, { color: colors.text }]}>Year Published: {book.yearPublished}</Text>
+          <Text style={[styles.bookDetailText, { color: colors.text }]}>Pages: {book.numberOfPages}</Text>
+          <Text style={[styles.bookDetailText, { color: colors.text }]}>Language: {book.language}</Text>
+          <Text style={[styles.bookDetailText, { color: colors.text }]}>ISBN: {book.isbn}</Text>
         </View>
 
-        <View style={styles.reviewsContainer}>
+        <View style={[styles.reviewsContainer]}>
           <View style={styles.reviewsHeader}>
-            <Text style={styles.reviewsTitle}>User Reviews</Text>
-            <Pressable onPress={handleAddReview} style={({ pressed }) => [styles.addReviewButton, pressed && { opacity: 0.5 }]}>
+            <Text style={[styles.reviewsTitle, { color: colors.text }]}>User Reviews</Text>
+            <Pressable
+              onPress={handleAddReview}
+              style={({ pressed }) => [
+                styles.addReviewButton,
+                { backgroundColor: colors.card },
+                pressed && { opacity: 0.5 }
+              ]}
+            >
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Ionicons name="add-circle-outline" size={24} color="#786EB9" />
-                <Text style={{ marginLeft: 8, color: "#786EB9", fontWeight: "bold" }}>Add Review</Text>
+                <Ionicons name="add-circle-outline" size={24} color={colors.text} />
+                <Text style={[styles.addReviewText, { color: colors.text }]}>Add Review</Text>
               </View>
             </Pressable>
           </View>
-          {reviews.map((review, index) => (
-            <View key={index} style={styles.reviewCard}>
-              <Text style={styles.reviewUsername}>{review.user?.username ?? "Anonymous"}</Text>
-              <View style={styles.reviewRating}>
-                {[...Array(5)].map((_, i) => (
-                  <Ionicons
-                    key={i}
-                    name={i < review.rating ? "star" : "star-outline"}
-                    size={16}
-                    color="#FFD700"
-                  />
-                ))}
+          {reviews.map((review, index) => {
+            const isUserReview = userId !== null && review.user?.userId === userId;
+            const formattedDate = new Date(review.dateCreated ?? "").toLocaleDateString();
+
+            return (
+               <View
+                  key={index}
+                  style={[styles.reviewCard, { borderColor: colors.primary, borderWidth: 1 }]}
+                >
+                <View style={styles.reviewHeader}>
+                  <Text style={[styles.reviewUsername, { color: colors.text }]}>{review.user?.username ?? "Anonymous"}</Text>
+
+                  {isUserReview && (
+                    <View style={styles.reviewActions}>
+                      <Pressable
+                        onPress={() => {
+                          setReviewRating(review.rating);
+                          setReviewComment(review.comment);
+                          setEditingReviewId(review.reviewId);
+                          setReviewModalVisible(true);
+                        }}
+                        style={{ marginRight: 10 }}
+                      >
+                        <Ionicons name="create-outline" size={20} color={colors.text} />
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => {
+                          Alert.alert("Confirm Delete", "Are you sure you want to delete this review?", [
+                            { text: "Cancel", style: "cancel" },
+                            {
+                              text: "Delete",
+                              style: "destructive",
+                              onPress: async () => {
+                                try {
+                                  await deleteReview(review.reviewId);
+                                  setReviews(prev => prev.filter(r => r.reviewId !== review.reviewId));
+                                } catch (error) {
+                                  console.error("Error deleting review:", error);
+                                  Alert.alert("Error", "Failed to delete review.");
+                                }
+                              }
+                            },
+                          ]);
+                        }}
+                      >
+                        <Ionicons name="trash" size={20} color={colors.text} />
+                      </Pressable>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.reviewRating}>
+                  {[...Array(5)].map((_, i) => (
+                    <Ionicons
+                      key={i}
+                      name={i < review.rating ? "star" : "star-outline"}
+                      size={16}
+                      color="#FFD700"
+                    />
+                  ))}
+                </View>
+
+                <Text style={[styles.reviewComment, { color: colors.text }]}>{review.comment}</Text>
+                <Text style={[styles.reviewDate, { color: colors.text }]}>Posted on: {formattedDate}</Text>
               </View>
-              <Text style={styles.reviewComment}>{review.comment}</Text>
-            </View>
-          ))}
+            );
+          })}
         </View>
       </ScrollView>
 
-      <View style={styles.stickyButtonsContainer}>
+      <View style={[styles.stickyButtonsContainer, { backgroundColor: colors.card }]}>
         <Pressable onPress={handleSave} style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.5 }]}>
-          <Ionicons name={saved ? "heart" : "heart-outline"} size={40} color="#ffffff" />
+          <Ionicons name={saved ? "heart" : "heart-outline"} size={40} color={colors.text} />
         </Pressable>
-        <Pressable onPress={handleAddToCart} style={({ pressed }) => [styles.addToCartButton, pressed && { opacity: 0.5 }]}>
-          <Text style={styles.addToCartText}>Add to Cart</Text>
+        <Pressable onPress={handleAddToCart} style={({ pressed }) => [styles.addToCartButton, pressed && { opacity: 0.5 }, { backgroundColor: "white" }]}>
+          <Text style={[styles.addToCartText, { color: colors.card }]} >Add to Cart</Text>
         </Pressable>
       </View>
 
@@ -247,10 +340,10 @@ const BookDetailsPage: React.FC = () => {
         onRequestClose={() => setReviewModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add Review</Text>
+          <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Add Review</Text>
 
-            <Text style={styles.label}>Rating</Text>
+            <Text style={[styles.label, { color: colors.text }]}>Rating</Text>
             <View style={{ flexDirection: "row", justifyContent: "center", marginBottom: 12 }}>
               {[1, 2, 3, 4, 5].map((star) => (
                 <Pressable key={star} onPress={() => setReviewRating(star)}>
@@ -264,14 +357,15 @@ const BookDetailsPage: React.FC = () => {
               ))}
             </View>
 
-            <Text style={styles.label}>Comment</Text>
+            <Text style={[styles.label, { color: colors.text }]}>Comment</Text>
             <TextInput
               multiline
               numberOfLines={4}
-              style={styles.textArea}
+              style={[styles.textArea, { borderColor: colors.border, color: colors.text }]}
               value={reviewComment}
               onChangeText={setReviewComment}
               placeholder="Write your review here..."
+              placeholderTextColor={colors.border}
             />
 
             <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 16 }}>
@@ -288,7 +382,6 @@ const BookDetailsPage: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#786EB9",
     paddingTop: 78,
     paddingHorizontal: 16,
     position: "relative",
@@ -307,28 +400,29 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 400,
     resizeMode: "contain",
-    borderRadius: 8,
     marginBottom: 16,
   },
   bookInfo: {
     marginBottom: 16,
   },
   bookTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: "bold",
-    color: "#ffffff",
     marginBottom: 8,
   },
   bookAuthor: {
-    fontSize: 18,
-    color: "#E5E2F3",
+    fontSize: 20,
     marginBottom: 8,
   },
   bookPrice: {
     fontSize: 28,
     fontWeight: "bold",
-    color: "#E5E2F3",
     textAlign: "left",
+  },
+  ratingText: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginLeft: 4,
   },
   genresContainer: {
     flexDirection: "row",
@@ -336,35 +430,28 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   genreBubble: {
-    backgroundColor: "#A095D1",
     borderRadius: 16,
     paddingVertical: 4,
     paddingHorizontal: 12,
     margin: 4,
   },
   genreText: {
-    color: "#ffffff",
-    fontSize: 14,
+    fontSize: 16,
   },
   descriptionText: {
-    fontSize: 16,
-    color: "#ffffff",
+    fontSize: 18,
     marginBottom: 20,
   },
   bookDetails: {
-    backgroundColor: "#A095D1",
     borderRadius: 2,
     padding: 12,
     marginBottom: 24,
   },
   bookDetailText: {
-    fontSize: 15,
-    fontWeight: "bold",
-    color: "#E5E2F3",
+    fontSize: 18,
     marginBottom: 8,
   },
   reviewsContainer: {
-    backgroundColor: "#A095D1",
     borderRadius: 2,
     padding: 12,
   },
@@ -374,34 +461,49 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
+  reviewHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
   reviewsTitle: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: "bold",
-    color: "#ffffff",
   },
   addReviewButton: {
-    backgroundColor: "#E5E2F3",
     borderRadius: 50,
     padding: 12,
+    borderWidth: 1,
+  },
+  addReviewText: {
+    marginLeft: 8,
+    fontWeight: "bold",
   },
   reviewCard: {
-    backgroundColor: "#786EB9",
     borderRadius: 8,
     padding: 12,
     marginBottom: 12,
   },
   reviewUsername: {
     fontSize: 16,
-    color: "#ffffff",
-    marginBottom: 8,
+    marginBottom: 4,
   },
   reviewRating: {
     flexDirection: "row",
     marginBottom: 8,
   },
   reviewComment: {
-    fontSize: 14,
-    color: "#E5E2F3",
+    fontSize: 16,
+    marginBottom: 4,
+  },
+  reviewDate: {
+    marginTop: 4,
+    fontSize: 12,
+  },
+  reviewActions: {
+    flexDirection: "row",
+    gap: 6,
   },
   stickyButtonsContainer: {
     position: "absolute",
@@ -410,25 +512,22 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: "row",
     justifyContent: "space-between",
-    padding: 10,
-    backgroundColor: "#A095D1",
-    borderTopWidth: 1,
-    borderTopColor: "#ffffff",
+    padding: 12,
+    paddingBottom: 26,
   },
   iconButton: {
     marginBlock: "auto",
+    marginLeft: 12,
   },
   addToCartButton: {
-    backgroundColor: "#ffffff",
     paddingVertical: 13,
     paddingHorizontal: 104,
     borderRadius: 2,
     alignItems: "center",
   },
   addToCartText: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: "bold",
-    color: "#786EB9",
   },
   center: {
     flex: 1,
@@ -443,7 +542,6 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     width: "90%",
-    backgroundColor: "#fff",
     borderRadius: 8,
     padding: 20,
     elevation: 5,
@@ -460,7 +558,6 @@ const styles = StyleSheet.create({
   },
   textArea: {
     borderWidth: 1,
-    borderColor: "#ccc",
     borderRadius: 4,
     padding: 10,
     textAlignVertical: "top",
