@@ -14,7 +14,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Book, BookGenreDto, Genre, deleteCollection, filterBooksByGenres, getCollectionByUser, getResource, postCartItem, postCollection } from "../../api/api-functions";
+import { Book, BookGenreDto, Genre, addToCart, deleteCollection, filterBooksByGenres, getCollectionByUser, getResource, postCollection } from "../../api/api-functions";
 import BookCard from "../../components/BookCard";
 
 const windowWidth = Dimensions.get("window").width;
@@ -81,12 +81,32 @@ const BrowsePage: React.FC = () => {
   }, [userId]);
 
   React.useEffect(() => {
-    getResource<Book[]>("Book").then(setBooks).catch(() => Alert.alert("Error", "Failed to load books."));
-    getResource<Genre[]>("Genre").then(setGenres).catch(() => Alert.alert("Error", "Failed to load genres."));
-    getResource<BookGenreDto[]>("BookGenre")
-      .then(setBookGenres)
-      .catch(() => Alert.alert("Error", "Failed to load book genres."));
-  }, []);
+  getResource<Book[]>("Book")
+    .then(setBooks)
+    .catch(error => {
+      Alert.alert("Error", "Failed to load books");
+    });
+
+  getResource<Genre[]>("Genre")
+    .then(setGenres)
+    .catch(error => {
+      Alert.alert("Error", "Failed to load genres");
+    });
+
+  getResource<BookGenreDto[]>("BookGenre")
+  .then(data => {
+    const transformed = data.map(bg => ({
+      bookId: bg.bookId,
+      genreId: bg.genreId,
+    }));
+    setBookGenres(transformed);
+  })
+  .catch(error => {
+    Alert.alert("Error", "Failed to load book genres");
+  });
+
+}, []);
+
 
   useFocusEffect(
     React.useCallback(() => {
@@ -102,24 +122,23 @@ const BrowsePage: React.FC = () => {
       const newSet = new Set(prev);
       if (newSet.has(genreId)) newSet.delete(genreId);
       else newSet.add(genreId);
-      console.log("Selected genres:", [...newSet]);
       return newSet;
     });
   };
 
-  const selectedGenresArray = React.useMemo(() => {
-    return Array.from(selectedGenres).sort((a, b) => a - b);
-  }, [selectedGenres]);
+const selectedGenresString = React.useMemo(
+  () => Array.from(selectedGenres).sort().join(","),
+  [selectedGenres]
+);
 
-  const filteredBooks = React.useMemo(() => {
-    console.log("Filtering books with selectedGenres:", selectedGenresArray);
-    return filterBooksByGenres(books, bookGenres, selectedGenres, searchTerm);
-  }, [books, bookGenres, searchTerm, selectedGenresArray.join(",")]);
+const filteredBooks = React.useMemo(() => {
+  return filterBooksByGenres(books, bookGenres, selectedGenres, searchTerm);
+}, [books, bookGenres, searchTerm, selectedGenresString]);
 
 
   const handleToggleSave = async (bookId: number, currentlySaved: boolean) => {
     if (!userId) {
-      Alert.alert("Error", "You must be logged in to save books.");
+      Alert.alert("Error", "You must be logged in to save books");
       return;
     }
     try {
@@ -139,21 +158,13 @@ const BrowsePage: React.FC = () => {
         if (savedCollection) setSavedBookIds(prev => new Set(prev).add(bookId));
       }
     } catch {
-      Alert.alert("Error", "Failed to update collection.");
+      Alert.alert("Error", "Failed to update collection");
     }
   };
 
   const handleAddToCart = async (bookId: number) => {
-    if (!userId) {
-      Alert.alert("Error", "You must be logged in to add to cart.");
-      return;
-    }
-    try {
-      const addedItem = await postCartItem({ userId, bookId, quantity: 1 });
-      if (addedItem) Alert.alert("Added to Cart", "Book added to cart");
-    } catch {
-      Alert.alert("Error", "Failed to add to cart.");
-    }
+    if (userId === null) return;
+    await addToCart(userId, bookId);
   };
 
   return (
@@ -213,7 +224,7 @@ const BrowsePage: React.FC = () => {
               style={{ width: cardWidth, marginBottom: 24 }}
             />
           )}
-          ListEmptyComponent={<Text style={[styles.noResultsText, { color: colors.text }]}>No books found.</Text>}
+          ListEmptyComponent={<Text style={[styles.noResultsText, { color: colors.text }]}>No books found</Text>}
         />
       </View>
     </View>

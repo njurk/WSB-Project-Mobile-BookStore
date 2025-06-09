@@ -18,12 +18,12 @@ import {
 import { API_URL } from "../api/api-connection";
 import type { Book, Genre, Review } from "../api/api-functions";
 import {
+  addToCart,
   deleteCollection,
   deleteReview,
   getCollectionByUserAndBook,
   getResourceById,
   patchReview,
-  postCartItem,
   postCollection,
   postReview
 } from "../api/api-functions";
@@ -105,20 +105,9 @@ const BookDetailsPage: React.FC = () => {
     }
   };
 
-  const handleAddToCart = async () => {
-    if (!book || userId === null) return;
-    try {
-      const addedItem = await postCartItem({
-        userId,
-        bookId: book.bookId,
-        quantity: 1,
-      });
-      if (addedItem) {
-        Alert.alert("Added to Cart", "Book added to cart");
-      }
-    } catch (error) {
-      console.error("Error adding to cart:", error);
-    }
+  const handleAddToCart = async (bookId: number) => {
+    if (userId === null) return;
+    await addToCart(userId, bookId);
   };
 
   const handleAddReview = () => {
@@ -128,11 +117,11 @@ const BookDetailsPage: React.FC = () => {
   const submitReview = async () => {
     if (!book || userId === null) return;
     if (reviewRating === 0) {
-      Alert.alert("Validation Error", "Please select a rating.");
+      Alert.alert("Error", "Please select a rating");
       return;
     }
     if (!reviewComment.trim()) {
-      Alert.alert("Validation Error", "Comment cannot be empty.");
+      Alert.alert("Error", "Comment cannot be empty");
       return;
     }
 
@@ -148,7 +137,7 @@ const BookDetailsPage: React.FC = () => {
           setReviews(prev =>
             prev.map(r => (r.reviewId === editingReviewId ? { ...r, ...updated } : r))
           );
-          Alert.alert("Success", "Review updated.");
+          Alert.alert("Success", "Review updated");
         }
       } else {
         const newReview = await postReview({
@@ -159,7 +148,7 @@ const BookDetailsPage: React.FC = () => {
         });
         if (newReview) {
           setReviews(prev => [newReview, ...prev]);
-          Alert.alert("Success", "Review added.");
+          Alert.alert("Success", "Review added");
         }
       }
       setReviewModalVisible(false);
@@ -167,8 +156,7 @@ const BookDetailsPage: React.FC = () => {
       setReviewComment("");
       setEditingReviewId(null);
     } catch (error) {
-      console.error("Review submission error:", error);
-      Alert.alert("Error", "Failed to submit review.");
+      Alert.alert("Error", "Failed to submit review");
     } finally {
       setSubmittingReview(false);
     }
@@ -189,7 +177,7 @@ const BookDetailsPage: React.FC = () => {
   if (!book) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.text }}>Book not found.</Text>
+        <Text style={{ color: colors.text }}>Book not found</Text>
       </View>
     );
   }
@@ -230,7 +218,7 @@ const BookDetailsPage: React.FC = () => {
 
         <View style={[styles.bookDetails, { borderColor: colors.primary, borderWidth: 1 }]}>
           <Text style={[styles.bookTitle, { color: colors.text }]}>Details</Text>
-          <Text style={[styles.bookDetailText, { color: colors.text }]}>Year Published: {book.yearPublished}</Text>
+          <Text style={[styles.bookDetailText, { color: colors.text }]}>Year: {book.yearPublished}</Text>
           <Text style={[styles.bookDetailText, { color: colors.text }]}>Pages: {book.numberOfPages}</Text>
           <Text style={[styles.bookDetailText, { color: colors.text }]}>Language: {book.language}</Text>
           <Text style={[styles.bookDetailText, { color: colors.text }]}>ISBN: {book.isbn}</Text>
@@ -238,7 +226,7 @@ const BookDetailsPage: React.FC = () => {
 
         <View style={[styles.reviewsContainer]}>
           <View style={styles.reviewsHeader}>
-            <Text style={[styles.reviewsTitle, { color: colors.text }]}>User Reviews</Text>
+            <Text style={[styles.reviewsTitle, { color: colors.text }]}>Reviews</Text>
             <Pressable
               onPress={handleAddReview}
               style={({ pressed }) => [
@@ -249,7 +237,7 @@ const BookDetailsPage: React.FC = () => {
             >
               <View style={{ flexDirection: "row", alignItems: "center" }}>
                 <Ionicons name="add-circle-outline" size={24} color={colors.text} />
-                <Text style={[styles.addReviewText, { color: colors.text }]}>Add Review</Text>
+                <Text style={[styles.addReviewText, { color: colors.text }]}>Add</Text>
               </View>
             </Pressable>
           </View>
@@ -317,7 +305,7 @@ const BookDetailsPage: React.FC = () => {
                 </View>
 
                 <Text style={[styles.reviewComment, { color: colors.text }]}>{review.comment}</Text>
-                <Text style={[styles.reviewDate, { color: colors.text }]}>Posted on: {formattedDate}</Text>
+                <Text style={[styles.reviewDate, { color: colors.text }]}>{formattedDate}</Text>
               </View>
             );
           })}
@@ -328,8 +316,8 @@ const BookDetailsPage: React.FC = () => {
         <Pressable onPress={handleSave} style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.5 }]}>
           <Ionicons name={saved ? "heart" : "heart-outline"} size={40} color={colors.text} />
         </Pressable>
-        <Pressable onPress={handleAddToCart} style={({ pressed }) => [styles.addToCartButton, pressed && { opacity: 0.5 }, { backgroundColor: "white" }]}>
-          <Text style={[styles.addToCartText, { color: colors.card }]} >Add to Cart</Text>
+        <Pressable onPress={() => handleAddToCart(book.bookId)} style={({ pressed }) => [styles.addToCartButton, pressed && { opacity: 0.5 }, { backgroundColor: "white" }]}>
+          <Text style={[styles.addToCartText, { color: colors.card }]} >Add to cart</Text>
         </Pressable>
       </View>
 
@@ -341,7 +329,7 @@ const BookDetailsPage: React.FC = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Add Review</Text>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Add review</Text>
 
             <Text style={[styles.label, { color: colors.text }]}>Rating</Text>
             <View style={{ flexDirection: "row", justifyContent: "center", marginBottom: 12 }}>

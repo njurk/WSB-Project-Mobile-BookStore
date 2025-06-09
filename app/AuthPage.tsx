@@ -25,7 +25,7 @@ const AuthPage: React.FC = () => {
   const submit = async () => {
     if (isLogin) {
       if (!identifier.trim() || !password.trim()) {
-        Alert.alert("Error", "Please fill in all fields");
+        Alert.alert("Error", "Please fill all fields");
         return;
       }
       try {
@@ -42,7 +42,7 @@ const AuthPage: React.FC = () => {
       }
     } else {
       if (!email.trim() || !username.trim() || !password.trim()) {
-        Alert.alert("Error", "Please fill in all fields");
+        Alert.alert("Error", "Please fill all fields");
         return;
       }
       try {
@@ -79,14 +79,14 @@ const AuthPage: React.FC = () => {
             onPress={() => setIsLogin(true)}
             style={[styles.toggleButton, isLogin && { backgroundColor: colors.card }]}
           >
-            <Text style={[styles.toggleText, isLogin && { color: "white" }]}>Login</Text>
+            <Text style={[styles.toggleText, isLogin && { color: "white" }]}>Log in</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() => setIsLogin(false)}
             style={[styles.toggleButton, !isLogin && { backgroundColor: colors.card }]}
           >
-            <Text style={[styles.toggleText, !isLogin && { color: "white" }]}>Sign Up</Text>
+            <Text style={[styles.toggleText, !isLogin && { color: "white" }]}>Sign up</Text>
           </TouchableOpacity>
         </View>
 

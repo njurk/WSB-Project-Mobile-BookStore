@@ -4,21 +4,18 @@ import { API_URL } from './api-connection';
 
 export type ResourceId = string | number;
 
-// GET
 export async function getResource<T>(resource: string): Promise<T> {
   const response = await fetch(`${API_URL}/api/${resource}`);
   if (!response.ok) throw new Error('Network response was not ok');
   return response.json() as Promise<T>;
 }
 
-// GET by ID
 export async function getResourceById<T>(resource: string, id: ResourceId): Promise<T> {
   const response = await fetch(`${API_URL}/api/${resource}/${id}`);
   if (!response.ok) throw new Error('Network response was not ok');
   return response.json() as Promise<T>;
 }
 
-// POST
 export async function createResource<T, U>(resource: string, data: T): Promise<U> {
   const response = await fetch(`${API_URL}/api/${resource}`, {
     method: 'POST',
@@ -29,7 +26,6 @@ export async function createResource<T, U>(resource: string, data: T): Promise<U
   return response.json() as Promise<U>;
 }
 
-// PUT by ID
 export async function updateResource<T, U>(resource: string, id: ResourceId, data: T): Promise<U> {
   const response = await fetch(`${API_URL}/api/${resource}/${id}`, {
     method: 'PUT',
@@ -40,7 +36,6 @@ export async function updateResource<T, U>(resource: string, id: ResourceId, dat
   return response.json() as Promise<U>;
 }
 
-// DELETE by ID
 export async function deleteResource<U>(resource: string, id: ResourceId): Promise<U> {
   const response = await fetch(`${API_URL}/api/${resource}/${id}`, {
     method: 'DELETE',
@@ -49,21 +44,18 @@ export async function deleteResource<U>(resource: string, id: ResourceId): Promi
   return response.json() as Promise<U>;
 }
 
-// user response type
 export interface UserResponse {
   UserId: number;
   Email: string;
   Username: string;
 }
 
-// user register data type
 export interface RegisterData {
   Email: string;
   Password: string;
   Username: string;
 }
 
-// register
 export async function register(data: RegisterData): Promise<UserResponse> {
   const response = await fetch(`${API_URL}/api/User`, {
     method: 'POST',
@@ -78,7 +70,6 @@ export async function register(data: RegisterData): Promise<UserResponse> {
   return response.json() as Promise<UserResponse>;
 }
 
-// Login
 export interface LoginData {
   Identifier: string;
   Password: string;
@@ -132,7 +123,6 @@ export interface Book {
   averageRating?: number;
 }
 
-// Collection
 export interface Collection {
   collectionId: number;
   userId: number;
@@ -176,7 +166,6 @@ export async function deleteCollection(collectionId: number, userId: number): Pr
   if (!response.ok) throw new Error('Failed to delete collection');
 }
 
-// Cart
 export interface CartItem {
   cartId: number;
   userId: number;
@@ -211,6 +200,21 @@ export async function getCartByUserId(userId: number): Promise<CartItem[]> {
   return response.json();
 }
 
+export async function addToCart(userId: number | null, bookId: number): Promise<boolean> {
+  if (userId === null) return false;
+  try {
+    const addedItem = await postCartItem({ userId, bookId, quantity: 1 });
+    if (addedItem) {
+      Alert.alert("Success", "Added to cart");
+      return true;
+    }
+    return false;
+  } catch (error) {
+    Alert.alert("Error", "Failed to add to cart");
+    return false;
+  }
+}
+
 export async function deleteCartItem(cartId: number): Promise<void> {
   const response = await fetch(`${API_URL}/api/Cart/${cartId}`, {
     method: "DELETE",
@@ -227,7 +231,6 @@ export async function updateCartItemQuantity(cartId: number, quantity: number): 
   if (!response.ok) throw new Error("Failed to update quantity");
 }
 
-// User
 export async function deleteUser(userId: number): Promise<void> {
   const response = await fetch(`${API_URL}/api/User/${userId}`, {
     method: "DELETE",
@@ -267,7 +270,6 @@ export async function patchUserCredentials(
   }
 }
 
-// Reviews
 export interface Review {
   reviewId: number;
   bookId: number;
@@ -349,8 +351,8 @@ export async function patchReview(reviewId: number, data: { rating?: number; com
 }
 
 export interface BookGenreDto {
-  BookId: number;
-  GenreId: number;
+  bookId: number;
+  genreId: number;
 }
 
 export function filterBooksByGenres(
@@ -359,33 +361,97 @@ export function filterBooksByGenres(
   selectedGenres: Set<number>,
   searchTerm: string
 ): Book[] {
-  const lowerSearch = searchTerm.trim().toLowerCase();
-
-  if (selectedGenres.size === 0) {
-    return books.filter(book =>
-      book.title.toLowerCase().includes(lowerSearch)
-    );
-  }
+  if (selectedGenres.size === 0 && searchTerm.trim() === "") return books;
 
   return books.filter(book => {
-    if (!book.title.toLowerCase().includes(lowerSearch)) return false;
+    const matchesSearch = book.title.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const genresForBook = new Set(
-      bookGenres
-        .filter(bg => bg.BookId === book.bookId)
-        .map(bg => bg.GenreId)
-    );
+    if (selectedGenres.size === 0) return matchesSearch;
 
-    console.log(`Book: ${book.title}`);
-  console.log('Genres for book:', [...genresForBook]);
-  console.log('Selected genres:', [...selectedGenres]);
+    const genresForBook = bookGenres
+      .filter(bg => bg.bookId === book.bookId)
+      .map(bg => bg.genreId);
 
-    for (const genreId of selectedGenres) {
-      if (genresForBook.has(genreId)) {
-        return true; 
-      }
-    }
+    const matchesGenre = Array.from(selectedGenres).every(g => genresForBook.includes(g));
 
-    return false;
+    return matchesSearch && matchesGenre;
   });
+}
+
+export interface Order {
+  orderId: number;
+  orderDate: string;
+  orderStatusName: string;
+  totalPrice: number;
+  totalItemCount: number;
+  street: string;
+  city: string;
+  postalCode: string;
+  deliveryType: string;
+  deliveryFee: number;
+}
+
+export async function getOrdersByUserId(userId: number): Promise<Order[]> {
+  const response = await fetch(`${API_URL}/api/Order/user/${userId}`);
+  if (!response.ok) throw new Error("Failed to fetch orders");
+  return await response.json();
+}
+
+export async function postOrder(orderData: any): Promise<void> {
+  const response = await fetch(`${API_URL}/api/Order`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(orderData),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("postOrder failed:", response.status, errorText);
+    throw new Error("Failed to post order");
+  }
+}
+
+export interface OrderItemDetails {
+  orderItemId: number;
+  bookId: number;
+  bookTitle: string;
+  imageUrl: string;
+  quantity: number;
+  priceAtPurchase: number;
+}
+
+export interface OrderDetails {
+  orderId: number;
+  userId: number;
+  orderDate: string;
+  orderStatus: number;
+  deliveryTypeName: string;
+  deliveryFee: number;
+  totalPrice: number;
+  street: string;
+  city: string;
+  postalCode: string;
+  orderItems: OrderItemDetails[];
+}
+
+export async function getOrderById(orderId: number): Promise<OrderDetails> {
+  const response = await fetch(`${API_URL}/api/Order/${orderId}`);
+  if (!response.ok) {
+    throw new Error("Failed to fetch order details");
+  }
+  return response.json();
+}
+
+export interface DeliveryType {
+  deliveryTypeId: number;
+  name: string;
+  fee: number;
+}
+
+export async function getDeliveryTypes(): Promise<DeliveryType[]> {
+  const response = await fetch(`${API_URL}/api/DeliveryType`);
+  if (!response.ok) {
+    throw new Error("Failed to fetch delivery types");
+  }
+  const data: DeliveryType[] = await response.json();
+  return data;
 }

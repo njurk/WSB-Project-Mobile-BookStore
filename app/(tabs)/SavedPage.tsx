@@ -6,7 +6,7 @@ import { useRouter } from "expo-router";
 import * as React from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { Collection } from "../../api/api-functions";
-import { deleteCollection, getCollectionByUser, postCartItem } from "../../api/api-functions";
+import { addToCart, deleteCollection, getCollectionByUser } from "../../api/api-functions";
 
 const SavedPage: React.FC = () => {
   const { colors } = useTheme();
@@ -26,7 +26,6 @@ const SavedPage: React.FC = () => {
         setSavedBooks(collections.filter(c => c.book != null));
       }
     } catch (error) {
-      console.error("Failed to load saved books", error);
     } finally {
       setLoading(false);
     }
@@ -51,11 +50,7 @@ const SavedPage: React.FC = () => {
 
   const handleAddToCart = async (bookId: number) => {
     if (userId === null) return;
-    try {
-      const addedItem = await postCartItem({ userId, bookId, quantity: 1 });
-    } catch (error) {
-      console.error("Failed to add book to cart", error);
-    }
+    await addToCart(userId, bookId);
   };
 
   const handleDelete = async (bookId: number) => {
@@ -87,7 +82,7 @@ const SavedPage: React.FC = () => {
         {savedBooks.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="book-outline" size={64} color={colors.text} style={{ marginBottom: 16 }} />
-            <Text style={[styles.emptyText, { color: colors.text }]}>No saved books yet.</Text>
+            <Text style={[styles.emptyText, { color: colors.text }]}>No saved books yet</Text>
           </View>
         ) : (
           savedBooks.map((collection) => {

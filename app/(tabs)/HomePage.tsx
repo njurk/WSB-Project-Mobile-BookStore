@@ -14,11 +14,11 @@ import {
 } from "react-native";
 import type { Book, Genre } from "../../api/api-functions";
 import {
+  addToCart,
   deleteCollection,
   getCollectionByUser,
   getResource,
-  postCartItem,
-  postCollection,
+  postCollection
 } from "../../api/api-functions";
 
 const windowWidth = Dimensions.get("window").width;
@@ -57,8 +57,7 @@ const HomePage: React.FC = () => {
         const books = await getResource<Book[]>("Book");
         setFeaturedBooks(books.slice(0, 10));
       } catch (error) {
-        Alert.alert("Error", "Failed to load featured books.");
-        console.error(error);
+        Alert.alert("Error", "Failed to load featured books");
       }
     };
 
@@ -67,8 +66,7 @@ const HomePage: React.FC = () => {
         const genresList = await getResource<Genre[]>("Genre");
         setGenres(genresList);
       } catch (error) {
-        Alert.alert("Error", "Failed to load genres.");
-        console.error(error);
+        Alert.alert("Error", "Failed to load genres");
       }
     };
 
@@ -123,7 +121,7 @@ const HomePage: React.FC = () => {
 
   const handleToggleSave = useCallback(async (bookId: number, currentlySaved: boolean) => {
     if (!userId) {
-      Alert.alert("Error", "You must be logged in to save books.");
+      Alert.alert("Error", "You must be logged in to save books");
       return;
     }
     try {
@@ -143,28 +141,14 @@ const HomePage: React.FC = () => {
         if (savedCollection) setSavedBookIds((prev) => new Set(prev).add(bookId));
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to update collection.");
+      Alert.alert("Error", "Failed to update collection");
     }
   }, [userId]);
 
-  const handleAddToCart = useCallback(async (bookId: number) => {
-    if (!userId) {
-      Alert.alert("Error", "You must be logged in to add to cart.");
-      return;
-    }
-    try {
-      const addedItem = await postCartItem({
-        userId,
-        bookId,
-        quantity: 1,
-      });
-      if (addedItem) {
-        Alert.alert("Added to Cart", "Book added to cart");
-      }
-    } catch (error) {
-      Alert.alert("Error", "Failed to add to cart.");
-    }
-  }, [userId]);
+  const handleAddToCart = async (bookId: number) => {
+    if (userId === null) return;
+    await addToCart(userId, bookId);
+  };
 
   const onViewRef = useRef(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {

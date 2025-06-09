@@ -1,12 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useTheme } from '@react-navigation/native';
+import { useRouter } from "expo-router";
 import * as React from "react";
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { API_URL } from "../../api/api-connection";
 import { CartItem, deleteCartItem, getCartByUserId, updateCartItemQuantity } from "../../api/api-functions";
 
 const CartPage: React.FC = () => {
+  const router = useRouter();
+  const { colors } = useTheme();
   const [cartItems, setCartItems] = React.useState<Array<CartItem>>([]);
   const [loading, setLoading] = React.useState(true);
   const [userId, setUserId] = React.useState<number | null>(null);
@@ -27,7 +30,6 @@ const CartPage: React.FC = () => {
             }
           }
         } catch (error) {
-          console.error("Failed to load user/cart", error);
         } finally {
           if (isActive) setLoading(false);
         }
@@ -76,7 +78,7 @@ const CartPage: React.FC = () => {
     const item = cartItems.find(i => i.cartId === itemId);
     if (!item) return;
     updateQuantity(itemId, item.quantity - 1);
-  };   
+  };
   
   const calculateTotal = () => {
     return cartItems.reduce(
@@ -85,7 +87,22 @@ const CartPage: React.FC = () => {
     );
   };
 
-  const { colors } = useTheme();
+    const totalPrice = React.useMemo(() => {
+      return cartItems.reduce(
+        (total, item) => total + (item.book?.price ?? 0) * item.quantity,
+        0
+      );
+    }, [cartItems]);
+
+  const handleCheckout = () => {
+    router.push({
+      pathname: "/CheckoutPage",
+      params: {
+        cartTotal: totalPrice.toString(),
+        cartItems: JSON.stringify(cartItems),
+      },
+    });
+  };
 
   if (loading) {
     return (
@@ -105,7 +122,7 @@ const CartPage: React.FC = () => {
         {cartItems.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="cart-outline" size={64} color={colors.text} style={{ marginBottom: 16 }} />
-            <Text style={[styles.emptyText, { color: colors.text }]}>Your cart is empty.</Text>
+            <Text style={[styles.emptyText, { color: colors.text }]}>Your cart is empty</Text>
           </View>
         ) : (
           cartItems.map((item) => (
@@ -155,14 +172,9 @@ const CartPage: React.FC = () => {
       {cartItems.length > 0 && (
         <View style={[styles.totalContainer, { backgroundColor: colors.card }]}>
           <Text style={[styles.totalText, { color: colors.text }]}>Total: ${calculateTotal().toFixed(2)}</Text>
-          <Pressable
-            style={({ pressed }) => [
-              styles.checkoutButton,
-              { backgroundColor: colors.primary, opacity: pressed ? 0.5 : 1 },
-            ]}
-          >
+          <TouchableOpacity onPress={handleCheckout} style={[styles.checkoutButton, { backgroundColor: colors.primary }]}>
             <Text style={[styles.checkoutText, { color: colors.text }]}>Checkout</Text>
-          </Pressable>
+          </TouchableOpacity>
         </View>
       )}
     </View>
